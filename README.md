@@ -18,7 +18,7 @@ Uma API de pedidos (`checkout-api`) instrumentada com os 3 pilares: **logs** (Pi
 Um template do CloudFormation cria tudo:
 
 ```
-Seu navegador ──(somente o seu IP)──▶ Security Group ──▶ EC2 t3.small (Amazon Linux 2023)
+Seu navegador ──(AllowedCidr)──▶ Security Group ──▶ EC2 t3.small (Amazon Linux 2023)
                                                           └─ Docker Compose
                                                               ├─ app         :3000   checkout-api
                                                               ├─ jaeger      :16686  traces
@@ -27,7 +27,7 @@ Seu navegador ──(somente o seu IP)──▶ Security Group ──▶ EC2 t3.
 ```
 
 - **EC2**: ao iniciar, instala o Docker, clona este repositório e executa `start.sh`.
-- **Security Group**: libera as portas 3000, 3001, 9090 e 16686 apenas para o IP informado. Não há SSH.
+- **Security Group**: libera as portas 3000, 3001, 9090 e 16686 para a faixa de IP do parâmetro `AllowedCidr`. Não há SSH.
 - **IAM Role**: permite abrir o terminal da instância pelo Session Manager (sem chave `.pem`).
 
 Custo aproximado: US$ 0,03 por hora enquanto a stack existir. **Apague a stack ao final da aula** (passo 7).
@@ -60,11 +60,12 @@ git push origin main
 Na raiz do repositório:
 
 ```bash
-aws cloudformation deploy --stack-name obsf-modulo-2 --template-file observability-lab/modulo-2/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=$(curl -s https://checkip.amazonaws.com)/32
+aws cloudformation deploy --stack-name obsf-modulo-2 --template-file observability-lab/modulo-2/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
 ```
 
 O comando usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`) e leva cerca de 2 minutos.
-O `AllowedCidr` é preenchido com o seu IP público atual. Para liberar também os alunos, troque pelo bloco de IP da rede da sala.
+Com `AllowedCidr=0.0.0.0/0` qualquer pessoa com o endereço acessa a demo, o que facilita o uso com os alunos; apague a stack ao fim da aula (passo 7).
+Para restringir ao seu IP, use `AllowedCidr=$(curl -s https://checkip.amazonaws.com)/32`. Rodar o comando de novo com outro valor atualiza a regra sem recriar a instância.
 
 Parâmetros opcionais (acrescente em `--parameter-overrides`):
 
@@ -74,7 +75,7 @@ Parâmetros opcionais (acrescente em `--parameter-overrides`):
 | `RepoBranch` | `main` | Outra branch |
 | `InstanceType` | `t3.small` | `t3.medium` ou `t3.large` |
 
-Prefere o console? **CloudFormation → Create stack → Upload a template file**, envie `observability-lab/modulo-2/aws/cloudformation.yaml`, preencha `AllowedCidr` com `SEU_IP/32` e marque a caixa de confirmação de recursos IAM.
+Prefere o console? **CloudFormation → Create stack → Upload a template file**, envie `observability-lab/modulo-2/aws/cloudformation.yaml`, preencha `AllowedCidr` com `0.0.0.0/0` (ou `SEU_IP/32` para restringir) e marque a caixa de confirmação de recursos IAM.
 
 ## 3. Pegar os endereços
 
@@ -195,14 +196,14 @@ Isso remove a instância, o Security Group e a Role. Nada fica cobrando depois.
 
 | Sintoma | O que fazer |
 |---------|-------------|
-| As URLs não abrem | Aguarde os 3 a 4 minutos iniciais. Se o seu IP mudou (outra rede, VPN), rode o passo 2 de novo: ele atualiza o `AllowedCidr`. |
+| As URLs não abrem | Aguarde os 3 a 4 minutos iniciais. Se restringiu o `AllowedCidr` ao seu IP e ele mudou (outra rede, VPN), rode o passo 2 de novo com o IP atual. |
 | A demo não subiu | No terminal da instância: `sudo tail -50 /var/log/cloud-init-output.log`. O erro mais comum é o `git clone` falhar porque o repositório está privado ou o código não foi enviado. |
 | Atualizei o código | No terminal da instância: `cd /opt/obsf && sudo git pull && cd observability-lab/modulo-2 && sudo docker compose up -d --force-recreate app` |
 | `No default VPC` ao criar a stack | Crie uma com `aws ec2 create-default-vpc` ou use outra região. |
 
 ## Segurança
 
-A demo usa HTTP sem criptografia, Grafana com `admin/admin` e Jaeger/Prometheus sem login. Por isso o acesso é restrito ao `AllowedCidr`: não use `0.0.0.0/0` e não deixe a stack ligada fora da aula.
+A demo usa HTTP sem criptografia, Grafana com `admin/admin` e Jaeger/Prometheus sem login. Com `0.0.0.0/0` tudo isso fica aberto para a internet: não coloque dados reais na demo e não deixe a stack ligada fora da aula.
 
 ## Arquivos do módulo 2
 
