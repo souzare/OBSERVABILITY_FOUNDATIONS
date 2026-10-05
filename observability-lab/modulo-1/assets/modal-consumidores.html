@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consumidores de Observabilidade</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal {
+    width: 100%;
+    max-width: 800px;
+    min-height: 500px;
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(38, 50, 56, .22);
+    display: flex;
+    flex-direction: column;
+  }
+  header { padding: 18px 24px; background: #263238; color: #fff; }
+  h1 { font-size: 22px; font-weight: 800; letter-spacing: -.3px; }
+  header p { font-size: 13px; color: #b0bec5; margin-top: 2px; }
+
+  .corpo { flex: 1; display: grid; grid-template-columns: 240px 1fr; }
+  .perfis { background: #f5f7f8; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .perfil {
+    --cor: #455a64;
+    font: inherit;
+    color: #263238;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: #fff;
+    border: 2px solid #cfd8dc;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    transition: border-color .2s, box-shadow .2s, transform .2s;
+  }
+  .perfil svg { width: 28px; height: 28px; flex: none; color: var(--cor); }
+  .perfil:hover { border-color: var(--cor); }
+  .perfil:focus-visible { outline: 3px solid var(--cor); outline-offset: 2px; }
+  .perfil[aria-selected="true"] {
+    border-color: var(--cor);
+    box-shadow: 0 6px 16px rgba(38, 50, 56, .2);
+    transform: translateX(4px);
+  }
+
+  .painel { --cor: #455a64; padding: 24px 28px; border-top: 6px solid var(--cor); transition: border-color .2s; }
+  .painel-topo { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .icone {
+    width: 72px; height: 72px; flex: none;
+    border-radius: 16px;
+    background: var(--cor);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .icone svg { width: 42px; height: 42px; }
+  .painel h2 { font-size: 24px; font-weight: 800; color: var(--cor); }
+  .pergunta { font-size: 14px; font-style: italic; color: #546e7a; margin-top: 2px; }
+  .precisa { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #78909c; margin-bottom: 8px; }
+  ul { list-style: none; display: grid; gap: 8px; }
+  li {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #f5f7f8;
+    border-left: 4px solid var(--cor);
+    animation: entra .3s both;
+  }
+  li b { display: block; font-size: 15px; }
+  li span { font-size: 13px; color: #546e7a; }
+  li:nth-child(2) { animation-delay: .05s; }
+  li:nth-child(3) { animation-delay: .1s; }
+  li:nth-child(4) { animation-delay: .15s; }
+  @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+
+  @media (max-width: 640px) {
+    .corpo { grid-template-columns: 1fr; }
+    .perfis { display: grid; grid-template-columns: 1fr 1fr; }
+    .perfil { font-size: 13px; padding: 10px; }
+    .perfil[aria-selected="true"] { transform: none; }
+    .painel { padding: 20px; }
+    .icone { width: 56px; height: 56px; }
+    .icone svg { width: 32px; height: 32px; }
+    .painel h2 { font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) { li { animation: none; } .perfil { transition: none; } }
+</style>
+</head>
+<body>
+<main class="modal">
+  <header>
+    <h1>Consumidores de Observabilidade</h1>
+    <p>Os mesmos dados, perguntas diferentes. Selecione um perfil.</p>
+  </header>
+  <div class="corpo">
+    <div class="perfis" id="perfis" role="tablist" aria-label="Perfis"></div>
+    <section class="painel" id="painel" role="tabpanel" aria-live="polite">
+      <div class="painel-topo">
+        <div class="icone" id="icone"></div>
+        <div>
+          <h2 id="titulo"></h2>
+          <p class="pergunta" id="pergunta"></p>
+        </div>
+      </div>
+      <div class="precisa">Precisa de</div>
+      <ul id="lista"></ul>
+    </section>
+  </div>
+</main>
+
+<script>
+  var svg = function (d) {
+    return '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+  };
+  var perfis = [
+    {
+      nome: 'DevOps Engineer', cor: '#1565c0',
+      icone: svg('<rect x="4" y="5" width="24" height="9" rx="2"/><rect x="4" y="18" width="24" height="9" rx="2"/><path d="M9 9.5h.01M9 22.5h.01M15 9.5h8M15 22.5h8"/>'),
+      pergunta: '"A plataforma aguenta a carga e o próximo deploy?"',
+      itens: [
+        ['Infraestrutura', 'Saúde de hosts, containers, rede e pipelines.'],
+        ['Performance', 'Uso de CPU, memória, latência e capacidade.'],
+        ['Alertas', 'Avisos acionáveis antes que o usuário perceba.']
+      ]
+    },
+    {
+      nome: 'SRE', cor: '#2e7d32',
+      icone: svg('<path d="M5 22a11 11 0 1 1 22 0"/><path d="M16 22l6-8"/><circle cx="16" cy="22" r="1.5" fill="currentColor"/>'),
+      pergunta: '"Estamos cumprindo o que prometemos ao usuário?"',
+      itens: [
+        ['SLIs', 'Indicadores que medem a experiência real do usuário.'],
+        ['SLOs', 'Metas de confiabilidade acordadas para cada serviço.'],
+        ['Error Budget', 'Quanto de falha ainda é tolerável no período.'],
+        ['Confiabilidade', 'Tendências de disponibilidade e resposta a incidentes.']
+      ]
+    },
+    {
+      nome: 'Developer', cor: '#455a64',
+      icone: svg('<path d="M11 9l-7 7 7 7M21 9l7 7-7 7M18 6l-4 20"/>'),
+      pergunta: '"Por que o meu código falhou em produção?"',
+      itens: [
+        ['Logs detalhados', 'Contexto completo do erro: mensagem, stack e parâmetros.'],
+        ['Traces', 'O caminho da requisição entre os serviços.'],
+        ['Debugging', 'Reproduzir e isolar a causa sem acessar o servidor.']
+      ]
+    },
+    {
+      nome: 'Security Team', cor: '#c62828',
+      icone: svg('<path d="M16 3l11 4v8c0 7-4.5 11.5-11 14C9.500 26.500 5 22 5 15V7z"/><path d="M11 16l3.500 3.500L21 13"/>'),
+      pergunta: '"Alguém está fazendo algo que não deveria?"',
+      itens: [
+        ['Eventos de segurança', 'Logins, mudanças de permissão e acessos a dados.'],
+        ['Anomalias', 'Comportamentos fora do padrão que indicam ameaça.'],
+        ['Compliance', 'Trilhas de auditoria para normas e regulações.']
+      ]
+    }
+  ];
+
+  var caixa = document.getElementById('perfis');
+  var painel = document.getElementById('painel');
+  var botoes = [];
+
+  function mostrar(i) {
+    var p = perfis[i];
+    botoes.forEach(function (b, j) {
+      b.setAttribute('aria-selected', j === i);
+      b.tabIndex = j === i ? 0 : -1;
+    });
+    painel.style.setProperty('--cor', p.cor);
+    document.getElementById('icone').innerHTML = p.icone;
+    document.getElementById('titulo').textContent = p.nome;
+    document.getElementById('pergunta').textContent = p.pergunta;
+    document.getElementById('lista').innerHTML = p.itens.map(function (it) {
+      return '<li><b>' + it[0] + '</b><span>' + it[1] + '</span></li>';
+    }).join('');
+  }
+
+  perfis.forEach(function (p, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'perfil';
+    b.setAttribute('role', 'tab');
+    b.style.setProperty('--cor', p.cor);
+    b.innerHTML = p.icone + '<span>' + p.nome + '</span>';
+    b.addEventListener('click', function () { mostrar(i); });
+    b.addEventListener('keydown', function (e) {
+      var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      var n = (i + d + perfis.length) % perfis.length;
+      mostrar(n);
+      botoes[n].focus();
+    });
+    caixa.appendChild(b);
+    botoes.push(b);
+  });
+
+  mostrar(0);
+</script>
+</body>
+</html>

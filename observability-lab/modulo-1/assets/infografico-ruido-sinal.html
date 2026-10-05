@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruído vs Sinal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .infografico {
+    width: 100%;
+    max-width: 1200px;
+    min-height: 600px;
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 20px 32px;
+    background: #263238;
+    color: #fff;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  header h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+  header p { font-size: 14px; color: #b0bec5; margin-top: 2px; }
+  button {
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: #1565c0;
+    color: #fff;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  button:hover { background: #1976d2; }
+  button:focus-visible { outline: 3px solid #90caf9; outline-offset: 2px; }
+
+  .lados { flex: 1; display: grid; grid-template-columns: 1fr 1fr; }
+  .lado { padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; }
+  .ruido { background: #ffebee; }
+  .sinal { background: #e8f5e9; }
+
+  .topo { display: flex; align-items: center; gap: 16px; }
+  .topo svg { width: 72px; height: 72px; flex: none; }
+  .rotulo { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .ruido .rotulo, .ruido .numero { color: #c62828; }
+  .sinal .rotulo, .sinal .numero { color: #2e7d32; }
+  .numero { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+  .unidade { font-size: 15px; font-weight: 600; color: #455a64; }
+
+  .selo {
+    align-self: flex-start;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: #fff;
+  }
+  .ruido .selo { background: #c62828; }
+  .sinal .selo { background: #2e7d32; }
+
+  .pontos { display: grid; gap: 4px; flex: 1; align-content: start; }
+  .ruido .pontos { grid-template-columns: repeat(20, 1fr); }
+  .sinal .pontos { grid-template-columns: repeat(10, 1fr); gap: 8px; }
+  .ponto { aspect-ratio: 1; border-radius: 50%; transition: opacity .5s, transform .5s, background .5s; }
+  .ruido .ponto { background: #e57373; }
+  .sinal .ponto { background: #43a047; max-width: 28px; }
+  .filtrado .ruido .ponto { opacity: .15; }
+  .filtrado .ruido .ponto.real { opacity: 1; background: #2e7d32; transform: scale(1.6); box-shadow: 0 0 0 3px #fff; }
+  .legenda { font-size: 12px; color: #546e7a; }
+
+  .mensagem {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .7);
+    border-left: 5px solid;
+  }
+  .ruido .mensagem { border-color: #c62828; }
+  .sinal .mensagem { border-color: #2e7d32; }
+
+  @media (max-width: 760px) {
+    .lados { grid-template-columns: 1fr; }
+    .lado { padding: 24px 20px; }
+    header { padding: 18px 20px; }
+    header h1 { font-size: 22px; }
+    .numero { font-size: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .ponto { transition: none; } }
+</style>
+</head>
+<body>
+<main class="infografico" id="infografico">
+  <header>
+    <div>
+      <h1>Ruído vs Sinal</h1>
+      <p>Mais dados não significam mais visibilidade</p>
+    </div>
+    <button id="filtrar" type="button" aria-pressed="false">Destacar o que importa</button>
+  </header>
+
+  <div class="lados">
+    <section class="lado ruido" aria-labelledby="t-ruido">
+      <div class="topo">
+        <svg viewBox="0 0 64 64" role="img" aria-label="Sino de alerta com X vermelho">
+          <path d="M30 8c-9 0-15 7-15 16v11l-5 8h40l-5-8V24c0-9-6-16-15-16z" fill="#ef9a9a" stroke="#c62828" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M24 47a6 6 0 0 0 12 0" fill="none" stroke="#c62828" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="47" cy="17" r="12" fill="#c62828" stroke="#ffebee" stroke-width="2.5"/>
+          <path d="M42 12l10 10M52 12L42 22" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <div class="rotulo" id="t-ruido">Ruído</div>
+          <div class="numero" data-alvo="10000">10.000</div>
+          <div class="unidade">alertas por dia</div>
+        </div>
+      </div>
+      <span class="selo">99% inúteis</span>
+      <div class="pontos" id="pontos-ruido" aria-hidden="true"></div>
+      <p class="legenda">Cada ponto = 50 alertas. Apenas 2 pontos (100 alertas) merecem atenção.</p>
+      <p class="mensagem">Dashboard poluído. Impossível encontrar o real problema.</p>
+    </section>
+
+    <section class="lado sinal" aria-labelledby="t-sinal">
+      <div class="topo">
+        <svg viewBox="0 0 64 64" role="img" aria-label="Sino de alerta com check verde">
+          <path d="M30 8c-9 0-15 7-15 16v11l-5 8h40l-5-8V24c0-9-6-16-15-16z" fill="#a5d6a7" stroke="#2e7d32" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M24 47a6 6 0 0 0 12 0" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="47" cy="17" r="12" fill="#2e7d32" stroke="#e8f5e9" stroke-width="2.5"/>
+          <path d="M41 17l4.5 4.5L53 13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <div class="rotulo" id="t-sinal">Sinal</div>
+          <div class="numero" data-alvo="50">50</div>
+          <div class="unidade">alertas por dia</div>
+        </div>
+      </div>
+      <span class="selo">100% relevantes</span>
+      <div class="pontos" id="pontos-sinal" aria-hidden="true"></div>
+      <p class="legenda">Cada ponto = 1 alerta. Todos acionáveis.</p>
+      <p class="mensagem">Insights claros. Ações rápidas baseadas em dados.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+  // Gera os pontos: 200 no ruído (2 reais = 1%), 50 no sinal
+  var ruido = document.getElementById('pontos-ruido');
+  var reais = [57, 143];
+  for (var i = 0; i < 200; i++) {
+    var p = document.createElement('span');
+    p.className = 'ponto' + (reais.indexOf(i) >= 0 ? ' real' : '');
+    ruido.appendChild(p);
+  }
+  var sinal = document.getElementById('pontos-sinal');
+  for (var j = 0; j < 50; j++) {
+    var s = document.createElement('span');
+    s.className = 'ponto';
+    sinal.appendChild(s);
+  }
+
+  // Botão: esmaece o ruído e destaca os alertas reais
+  var botao = document.getElementById('filtrar');
+  var raiz = document.getElementById('infografico');
+  botao.addEventListener('click', function () {
+    var ativo = raiz.classList.toggle('filtrado');
+    botao.setAttribute('aria-pressed', ativo);
+    botao.textContent = ativo ? 'Mostrar todo o ruído' : 'Destacar o que importa';
+  });
+
+  // Contadores animados
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('.numero').forEach(function (el) {
+      var alvo = +el.dataset.alvo, inicio = null;
+      function passo(t) {
+        if (!inicio) inicio = t;
+        var k = Math.min((t - inicio) / 1200, 1);
+        el.textContent = Math.round(alvo * (1 - Math.pow(1 - k, 3))).toLocaleString('pt-BR');
+        if (k < 1) requestAnimationFrame(passo);
+      }
+      requestAnimationFrame(passo);
+    });
+  }
+</script>
+</body>
+</html>

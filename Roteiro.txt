@@ -1,0 +1,37 @@
+Modulo 1
+    -HTML ou Infográfico explicando a diferença entre ruído e sinal
+    -Inforgráfico explicando o MELT
+    -Atividade para os alunos definirem quem são os consumidores de observabilidade (A depender do número de alunos, pode ser com eles fazendo ou eu conduzindo)
+    -Modelo de Maturidade mais recente
+
+Módulo 2
+    -A partir daqui, vamos montar um desenho de arquitetura e ir "ligando" o desenho de acordo com o que formos habilitando
+    -Demo habilitando cada um dos pilares na nossa aplicação, a ideia será subir uma aplicação do zero e ir instrumentando ela aos poucos de acordo com o pilar apresentado, mostrando como eles se complementam
+    -Na parte de trace subir um jagger ou fazer no Datadog, para ficar mais legal e ilustrado
+    -Gerar um infográfico para expliar melhor o tracespan e sampling, ou gerar um exemplo bem feito no Datadog
+
+Modulo 3
+    -Aqui é tudo sobre OpenTelemetry. O que podemos pensar é refazer a instrumentação que fizemos utilizando o OTEL agora
+    -Trazer uma visão melhorada do caso de uso
+
+Módulo 4
+    -Montar a visão de Service Mapping, correlacionando meus serviços e minha infra
+    -Melhorar a explicação de Time Travel Topology
+
+Módulo 5
+    -Explicar a CIA Triad
+
+Módulo 6
+    -Aqui talvez rodar a demo de AIOPS para explicar a importância dos dados e do ML
+    -Correlacionar com a nossa demo, talvez explicar de uma forma diferente
+
+Módulo 7
+    -Mostrar o EBPF como isso pode ser feito na nossa demo
+    -Mostrar recursos adicionais de segurança com o Datadog focando na seguraça de containeres
+
+Módulo 8
+    -Montar a visão de SLO para mostrar com a Observabilidade se encaixa no ciclo de SRE
+    -Plugar a demo com a engenharia do Caos
+
+     
+No final do curso, vamos levar em consideração fazer o quiz 

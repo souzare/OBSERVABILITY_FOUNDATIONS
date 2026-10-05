@@ -1,0 +1,23 @@
+{
+  "name": "checkout-api",
+  "version": "1.0.0",
+  "description": "App de demonstração do Módulo 2: logs, métricas e traces",
+  "main": "app.js",
+  "private": true,
+  "scripts": {
+    "start": "node app.js",
+    "load": "node load.js"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "0.222.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-node": "0.222.0",
+    "express": "5.2.1",
+    "pino": "10.4.0",
+    "prom-client": "15.1.3"
+  }
+}
