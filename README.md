@@ -6,6 +6,7 @@ Material de apoio e demos do curso **Observability Foundations**.
 |--------|----------|-----------|
 | 1 — Conceitos | Infográficos: ruído vs sinal, MELT, consumidores de observabilidade | `observability-lab/modulo-1/assets/` (abra os `.html` no navegador) |
 | 2 — Pilares | Demo `checkout-api` com logs, métricas e traces, rodando na AWS | `observability-lab/modulo-2/` |
+| 3 — OpenTelemetry | A mesma API com auto-instrumentação, hierarquia de spans, baggage e eventos | `observability-lab/modulo-3/` ([instruções](#módulo-3-opentelemetry)) |
 
 ---
 
@@ -293,3 +294,147 @@ cd observability-lab/modulo-2 && ./start.sh
 ```
 
 Endereços: app em http://localhost:3000, Jaeger em http://localhost:16686, Prometheus em http://localhost:9090 e Grafana em http://localhost:3001. Para parar: `docker compose down`.
+
+---
+
+# Módulo 3: OpenTelemetry
+
+A mesma `checkout-api` do Módulo 2, refeita com o SDK do OpenTelemetry. Prometheus, Grafana e Jaeger são os mesmos; o que muda é a instrumentação de traces e logs.
+
+## O que mudou em relação ao Módulo 2
+
+| | Módulo 2 | Módulo 3 |
+|---|----------|----------|
+| Span da requisição | Criado na mão, em um middleware | Criado pela **auto-instrumentação** HTTP/Express |
+| Configuração | Dentro do `app.js` | Em `tracing.js`, carregado na primeira linha do `app.js` |
+| Trace do `POST /orders` | 2 spans | 5 spans em **hierarquia** |
+| Contexto do pedido | Atributos só no span raiz | **Baggage** levada a todos os spans e logs |
+| Momentos dentro do span | Não havia | **Eventos** (validação, gravação, e-mail, retries) |
+| Logs | `trace_id` | `trace_id` + `span_id` + itens da baggage |
+| Erros | 5% aleatório no GET | Retries na gravação: até 3 tentativas, depois erro 500 |
+
+Hierarquia de um `POST /orders`:
+
+```
+POST /orders                    auto-instrumentação HTTP
+└─ process_order                span de negócio: payment_method, customer_tier
+   ├─ validate_order            ~50 ms   eventos: order.validation.started / passed / failed
+   ├─ save_to_database          ~200 ms por tentativa   atributos: tentativas, rows_affected, db_latency_ms
+   └─ send_confirmation_email   ~150 ms  evento: email.send.queued
+```
+
+## Conceitos
+
+| Conceito | O que é | Onde ver no código | Onde ver na demo |
+|----------|---------|--------------------|------------------|
+| **Atributo** | Um par chave/valor que descreve **um span**. Serve de filtro na busca. | `span.setAttributes({ payment_method, customer_tier })` em `app.js` | Jaeger, aba **Tags** do span `process_order` |
+| **Baggage** | Dados que **viajam com a requisição** pelo contexto, de um span para o próximo (e entre serviços). Sozinha ela não aparece em lugar nenhum: alguém precisa ler e usar. | `propagation.createBaggage(...)` em `app.js`; a classe `BaggageParaAtributos` em `tracing.js` copia cada item para os spans | `customer_id`, `order_id` e `correlation_id` em **todos** os spans filhos e em todas as linhas de log |
+| **Evento** | Um **momento** dentro de um span, com horário exato. É como um log preso ao span. | `span.addEvent('order.validation.passed')` | Jaeger, seção **Logs** dentro do span |
+| **Correlação de logs** | Toda linha de log carrega o `trace_id` e o `span_id` do span ativo. | `mixin()` do Pino em `app.js` | `docker logs`: copie o `trace_id` e cole na busca do Jaeger |
+
+Regra prática: **atributo** responde "como era esta operação?", **evento** responde "o que aconteceu durante ela, e quando?", **baggage** responde "que contexto as próximas etapas precisam conhecer?".
+
+## Subir a demo
+
+### Opção A: na mesma instância do Módulo 2 (recomendado)
+
+Usa a stack `obsf-modulo-2` que já existe; os endereços continuam os mesmos. Depois de publicar o código do Módulo 3 no GitHub (`git add -A`, `git commit`, `git push origin main`), no terminal da instância:
+
+```bash
+cd /opt/obsf && sudo git pull
+```
+
+```bash
+cd /opt/obsf/observability-lab/modulo-2 && sudo docker compose down
+```
+
+```bash
+cd /opt/obsf/observability-lab/modulo-3 && sudo ./start.sh
+```
+
+Para voltar ao Módulo 2, faça o inverso: `docker compose down` na pasta `modulo-3` e `./start.sh` na `modulo-2`. Os dois módulos usam as mesmas portas, então só um roda por vez.
+
+### Opção B: uma instância só para o Módulo 3
+
+```bash
+aws cloudformation deploy --stack-name obsf-modulo-3 --template-file observability-lab/modulo-3/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
+```
+
+```bash
+aws cloudformation describe-stacks --stack-name obsf-modulo-3 --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
+```
+
+Vale tudo o que está descrito no Módulo 2 (tempo de espera, segurança, custo). Ao final: `aws cloudformation delete-stack --stack-name obsf-modulo-3`.
+
+### Opção C: local
+
+```bash
+cd observability-lab/modulo-3 && ./start.sh
+```
+
+## Gerar tráfego
+
+No terminal da instância (ou local), dentro de `observability-lab/modulo-3`:
+
+```bash
+sudo docker compose run --rm load
+```
+
+Igual ao do Módulo 2, com dois acréscimos: o cabeçalho `X-Customer-Tier` (`premium` ou `standard`) e o campo `payment_method` (`credit_card`, `pix` ou `boleto`).
+
+## O que mostrar
+
+### 1. Hierarquia e timeline (Jaeger)
+
+1. Service `checkout-api`, Operation `POST /orders`, **Find Traces**.
+2. Abra um trace: são 5 spans. A timeline mostra que `save_to_database` é a etapa mais demorada.
+3. Clique em `process_order` → **Tags**: `payment_method`, `customer_tier` (atributos) e `customer_id`, `order_id`, `correlation_id` (vindos da baggage).
+4. Clique em `validate_order` → **Logs**: os eventos `order.validation.started` e `order.validation.passed`, com o horário de cada um.
+5. Clique em `save_to_database`: o atributo `tentativas` e, quando houve nova tentativa, o evento `database.insert.retry`.
+
+### 2. Buscar por atributo
+
+No campo **Tags** da busca do Jaeger:
+
+| Busca | O que encontra |
+|-------|----------------|
+| `customer_tier=premium` | Pedidos de clientes premium |
+| `payment_method=pix` | Pedidos pagos com pix |
+| `tentativas=2` | Gravações que precisaram de uma segunda tentativa |
+| `error=true` | Pedidos inválidos (400) e falhas de banco (500) |
+
+### 3. Um erro de ponta a ponta
+
+1. Busque `error=true` com Operation `POST /orders` e abra um trace com status 500.
+2. `save_to_database` aparece em vermelho, com três eventos `database.insert.retry` e um evento `exception` com a mensagem e a stack trace.
+3. O erro sobe pela hierarquia: `process_order` e `POST /orders` também ficam marcados.
+
+### 4. Do log ao trace
+
+```bash
+sudo docker logs modulo-3-app-1 | grep '"level":"ERROR"' | tail -1
+```
+
+Copie o `trace_id` e cole na busca do Jaeger: abre o trace daquela requisição. O `span_id` indica em qual span o log foi escrito.
+
+O Jaeger não exibe os logs da aplicação, então o caminho é sempre log → `trace_id` → Jaeger. Os "Logs" que aparecem dentro de um span no Jaeger são os **eventos** do span.
+
+Exemplo de linha de log (uma por etapa do pedido):
+
+```json
+{"level":"INFO","timestamp":"2026-10-06T20:40:01.351Z","service":"checkout-api","trace_id":"b2d9f3f1172fe36f2a47271fe41007b2","span_id":"fd7964e987e9ccfd","customer_id":"CUST-293","order_id":"ORD-6d000d1b","correlation_id":"462ab034-59e6-4d81-b2e2-6e28905df7c3","message":"pedido validado"}
+```
+
+### 5. Métricas e sampling
+
+Continuam como no Módulo 2: mesmas queries no Prometheus, mesmo `TRACE_SAMPLE_RATE` no `.env` e mesmo `sudo ./atualizar.sh` (agora na pasta `modulo-3`).
+
+## Arquivos do módulo 3
+
+| Arquivo | Para que serve |
+|---------|----------------|
+| `tracing.js` | Configuração do OpenTelemetry: recurso, sampler, exportador, auto-instrumentação e baggage → atributos |
+| `app.js` | A aplicação: hierarquia de spans, baggage, atributos, eventos e logs correlacionados |
+| `load.js` | Gerador de tráfego |
+| `.env` | Variáveis (taxa de falha do banco, taxa de sampling) |
+| Demais arquivos | Iguais aos do Módulo 2 (Docker Compose, Prometheus, Grafana, scripts, template da AWS) |

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura - Módulo 2 e Módulo 3</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .cartao {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px 24px 24px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+  .subtitulo { font-size: 13px; color: #546e7a; margin-top: 2px; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+
+  /* Faixa da infraestrutura (igual nos dois módulos) */
+  .infra {
+    margin: 14px 0 6px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #fff3e0;
+    border: 1.5px solid #ffcc80;
+    font-size: 13px;
+  }
+  .infra b { color: #e65100; margin-right: 4px; }
+  .infra span { background: #fff; border-radius: 6px; padding: 3px 10px; }
+  .infra i { font-style: normal; color: #ef6c00; font-weight: 700; }
+
+  .legenda { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: #546e7a; margin-bottom: 14px; }
+  .novo {
+    display: inline-block;
+    font-size: 10px; font-weight: 800; letter-spacing: .5px;
+    background: #ef6c00; color: #fff;
+    border-radius: 4px; padding: 1px 6px;
+    vertical-align: 1px;
+  }
+
+  /* Um módulo */
+  .modulo { border: 2px solid #cfd8dc; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 16px; }
+  .modulo.m3 { border-color: #2e7d32; }
+  .modulo h2 { font-size: 18px; font-weight: 800; margin-bottom: 2px; }
+  .modulo.m3 h2 { color: #2e7d32; }
+  .modulo > p { font-size: 13px; color: #546e7a; margin-bottom: 12px; }
+
+  .fluxo { display: grid; grid-template-columns: 215px 40px minmax(0, 1fr) minmax(0, 420px); align-items: center; }
+
+  .caixa { border: 2px solid #455a64; border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .caixa h3 { font-size: 15px; font-weight: 800; }
+  .caixa small { display: block; font-size: 12px; color: #546e7a; }
+  .lista { list-style: none; margin-top: 6px; display: grid; gap: 3px; font-size: 12px; }
+  .mudou { outline: 2px dashed #ef6c00; outline-offset: 2px; border-radius: 6px; }
+
+  /* Setas */
+  .seta { position: relative; height: 2.5px; background: #455a64; margin: 0 6px; }
+  .seta::after { content: ""; position: absolute; right: -2px; top: -5px; border: 6px solid transparent; border-left-color: #455a64; border-right: 0; }
+  .seta.volta::after { right: auto; left: -2px; border-left: 0; border-right: 6px solid #455a64; border-left-color: transparent; }
+  .seta.azul { background: #1565c0; } .seta.azul.volta::after { border-right-color: #1565c0; }
+  .seta.verde { background: #2e7d32; } .seta.verde::after { border-left-color: #2e7d32; }
+
+  /* A aplicação */
+  .app { border-radius: 12px; background: #263238; color: #eceff1; padding: 12px 14px; }
+  .app h3 { font-size: 16px; font-weight: 800; color: #fff; }
+  .app small { color: #b0bec5; font-size: 12px; }
+  .arquivo { margin-top: 10px; border-radius: 8px; background: #37474f; padding: 8px 10px; }
+  .arquivo h4 { font-size: 12px; font-weight: 700; color: #ffd54f; margin-bottom: 6px; }
+  .arquivo.novo-arquivo { outline: 2px dashed #ef6c00; outline-offset: 2px; }
+  .etapa { display: block; font-size: 12.5px; padding: 5px 8px; border-radius: 6px; background: #455a64; margin-top: 4px; }
+  .etapa b { color: #fff; }
+  .etapa.t { border-left: 4px solid #81c784; }
+  .etapa.l { border-left: 4px solid #cfd8dc; }
+  .etapa.m { border-left: 4px solid #64b5f6; }
+  .arvore { margin: 4px 0 0 4px; white-space: pre; color: #c8e6c9; line-height: 1.5; }
+
+  /* Destinos */
+  .destinos { display: grid; gap: 10px; }
+  .linha { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; }
+  .rotulo { font-size: 11.5px; text-align: center; color: #455a64; margin-bottom: 3px; }
+  .destino { border: 2px solid; border-radius: 10px; padding: 8px 12px; }
+  .destino h3 { font-size: 14px; font-weight: 800; }
+  .destino small { display: block; font-size: 12px; color: #546e7a; }
+  .logs { border-color: #455a64; background: #eceff1; }
+  .met { border-color: #1565c0; background: #e3f2fd; } .met h3 { color: #1565c0; }
+  .tra { border-color: #2e7d32; background: #e8f5e9; } .tra h3 { color: #2e7d32; }
+  .campos { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .campo { background: #fff; border-radius: 5px; padding: 1px 6px; }
+
+  /* Mini timeline do Jaeger */
+  .trace { margin-top: 6px; display: grid; gap: 3px; }
+  .span { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 6px; font-size: 11px; }
+  .span .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trilho { position: relative; height: 10px; background: #fff; border-radius: 3px; }
+  .barra { position: absolute; top: 0; height: 10px; border-radius: 3px; background: #2e7d32; }
+  .barra.filho { background: #66bb6a; }
+  .barra.auto { background: #90a4ae; }
+  .ev { position: absolute; top: 1px; width: 8px; height: 8px; border-radius: 50%; background: #ef6c00; border: 1.5px solid #fff; }
+
+  /* Tabela do que mudou */
+  h2.secao { font-size: 16px; font-weight: 800; margin: 20px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eceff1; vertical-align: top; }
+  th { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #78909c; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  td:last-child { background: #f1f8e9; }
+  .rolagem { overflow-x: auto; }
+
+  @media (max-width: 980px) {
+    .fluxo { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .fluxo > .seta { display: none; }
+    .linha { grid-template-columns: 90px minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <h1>Arquitetura da checkout-api: Módulo 2 e Módulo 3</h1>
+  <p class="subtitulo">A infraestrutura é a mesma. O que muda é como a aplicação é instrumentada e o que ela entrega a cada ferramenta.</p>
+
+  <div class="infra">
+    <b>Igual nos dois módulos:</b>
+    <span>AWS CloudFormation</span><i>→</i>
+    <span>Security Group (3000, 3001, 9090, 16686)</span><i>→</i>
+    <span>EC2 t3.small</span><i>→</i>
+    <span>Docker Compose: app, Jaeger, Prometheus, Grafana</span>
+  </div>
+  <div class="legenda">
+    <span><span class="novo">NOVO</span> existe só no Módulo 3</span>
+    <span><span class="mudou" style="padding:0 6px">tracejado laranja</span> = mudou em relação ao Módulo 2</span>
+    <span><span class="ev" style="position:static;display:inline-block;vertical-align:-1px"></span> evento de span</span>
+  </div>
+
+  <!-- ============================ MÓDULO 2 ============================ -->
+  <section class="modulo">
+    <h2>Módulo 2 — instrumentação manual</h2>
+    <p>Tudo em um arquivo. O span de cada requisição é criado e encerrado por código nosso, dentro de um middleware.</p>
+
+    <div class="fluxo">
+      <div class="caixa">
+        <h3>load.js</h3>
+        <small>gera tráfego</small>
+        <ul class="lista mono">
+          <li>POST /orders</li>
+          <li>GET /orders/:id</li>
+          <li>X-Correlation-ID</li>
+        </ul>
+      </div>
+      <div class="seta"></div>
+
+      <div class="app">
+        <h3>checkout-api <small>· Express · porta 3000</small></h3>
+        <div class="arquivo">
+          <h4>app.js</h4>
+          <span class="etapa t"><b>Configuração do SDK</b> · recurso, sampler, exportador OTLP</span>
+          <span class="etapa t"><b>Middleware:</b> <code>tracer.startSpan()</code> … <code>span.end()</code> na mão</span>
+          <span class="etapa l"><b>Pino:</b> log de entrada e saída com <code>trace_id</code></span>
+          <span class="etapa m"><b>prom-client:</b> contador, histograma, gauge</span>
+          <span class="etapa t"><b>Rotas:</b> um span filho por rota</span>
+        </div>
+      </div>
+
+      <div class="destinos" style="margin-left:6px">
+        <div class="linha">
+          <div><div class="rotulo">logs JSON</div><div class="seta"></div></div>
+          <div class="destino logs">
+            <h3>stdout <small style="display:inline">· docker logs</small></h3>
+            <div class="campos mono"><span class="campo">trace_id</span><span class="campo">sampled</span><span class="campo">status</span><span class="campo">duration_ms</span></div>
+          </div>
+        </div>
+        <div class="linha">
+          <div><div class="rotulo">scrape /metrics</div><div class="seta azul volta"></div></div>
+          <div class="destino met">
+            <h3>Prometheus :9090 <small style="display:inline">← Grafana :3001</small></h3>
+            <small>http_requests_total, duração, orders_pending, traces_total</small>
+          </div>
+        </div>
+        <div class="linha">
+          <div><div class="rotulo">spans · OTLP :4318</div><div class="seta verde"></div></div>
+          <div class="destino tra">
+            <h3>Jaeger :16686 <small style="display:inline">· 2 spans por trace</small></h3>
+            <div class="trace mono">
+              <div class="span"><span class="nome">POST /orders</span><div class="trilho"><div class="barra" style="left:0;width:100%"></div></div></div>
+              <div class="span"><span class="nome">&nbsp;└ processar-pedido</span><div class="trilho"><div class="barra filho" style="left:0;width:99%"></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ MÓDULO 3 ============================ -->
+  <section class="modulo m3">
+    <h2>Módulo 3 — OpenTelemetry com auto-instrumentação</h2>
+    <p>A configuração vai para um arquivo próprio, o span da requisição nasce sozinho e o código de negócio ganha hierarquia, baggage e eventos.</p>
+
+    <div class="fluxo">
+      <div class="caixa">
+        <h3>load.js</h3>
+        <small>gera tráfego</small>
+        <ul class="lista mono">
+          <li>POST /orders</li>
+          <li>GET /orders/:id</li>
+          <li>X-Correlation-ID</li>
+          <li class="mudou">X-Customer-Tier <span class="novo">NOVO</span></li>
+          <li class="mudou">payment_method <span class="novo">NOVO</span></li>
+        </ul>
+      </div>
+      <div class="seta"></div>
+
+      <div class="app">
+        <h3>checkout-api <small>· Express · porta 3000</small></h3>
+        <div class="arquivo novo-arquivo">
+          <h4>tracing.js <span class="novo">NOVO</span> · carregado antes do Express</h4>
+          <span class="etapa t"><b>Auto-instrumentação HTTP/Express:</b> cria o span <code>POST /orders</code> sozinha</span>
+          <span class="etapa t"><b>BaggageParaAtributos:</b> copia a baggage para todo span que nasce</span>
+          <span class="etapa t"><b>Sampler + BatchSpanProcessor</b> · exportador OTLP</span>
+        </div>
+        <div class="arquivo">
+          <h4>app.js</h4>
+          <span class="etapa m"><b>Middleware:</b> só métricas e log; o span já existe</span>
+          <span class="etapa t mudou"><b>POST /orders:</b> cria a <b>baggage</b> (customer_id, order_id, correlation_id) e abre a hierarquia
+<span class="arvore mono">process_order      atributos: payment_method, customer_tier
+├─ validate_order            evento: order.validation.*
+├─ save_to_database          tentativas, db_latency_ms
+└─ send_confirmation_email   evento: email.send.queued</span></span>
+          <span class="etapa l mudou"><b>Pino mixin:</b> <code>trace_id</code> + <code>span_id</code> + baggage em toda linha</span>
+          <span class="etapa t mudou"><b>Erros:</b> <code>recordException</code> + status ERROR no span que falhou</span>
+        </div>
+      </div>
+
+      <div class="destinos" style="margin-left:6px">
+        <div class="linha">
+          <div><div class="rotulo">logs JSON</div><div class="seta"></div></div>
+          <div class="destino logs mudou">
+            <h3>stdout <small style="display:inline">· um log por etapa do pedido</small></h3>
+            <div class="campos mono"><span class="campo">trace_id</span><span class="campo">span_id</span><span class="campo">customer_id</span><span class="campo">order_id</span><span class="campo">correlation_id</span></div>
+          </div>
+        </div>
+        <div class="linha">
+          <div><div class="rotulo">scrape /metrics</div><div class="seta azul volta"></div></div>
+          <div class="destino met">
+            <h3>Prometheus :9090 <small style="display:inline">← Grafana :3001</small></h3>
+            <small>mesmas métricas do Módulo 2 · o scrape não gera trace</small>
+          </div>
+        </div>
+        <div class="linha">
+          <div><div class="rotulo">spans · OTLP :4318</div><div class="seta verde"></div></div>
+          <div class="destino tra mudou">
+            <h3>Jaeger :16686 <small style="display:inline">· 5 spans por trace</small></h3>
+            <div class="trace mono">
+              <div class="span"><span class="nome">POST /orders</span><div class="trilho"><div class="barra auto" style="left:0;width:100%"></div></div></div>
+              <div class="span"><span class="nome">└ process_order</span><div class="trilho"><div class="barra" style="left:0;width:99%"></div></div></div>
+              <div class="span"><span class="nome">&nbsp;&nbsp;├ validate_order</span><div class="trilho"><div class="barra filho" style="left:0;width:9%"></div><span class="ev" style="left:0"></span><span class="ev" style="left:7%"></span></div></div>
+              <div class="span"><span class="nome">&nbsp;&nbsp;├ save_to_database</span><div class="trilho"><div class="barra filho" style="left:9%;width:66%"></div><span class="ev" style="left:41%"></span><span class="ev" style="left:73%"></span></div></div>
+              <div class="span"><span class="nome">&nbsp;&nbsp;└ send_confirmation…</span><div class="trilho"><div class="barra filho" style="left:75%;width:24%"></div><span class="ev" style="left:97%"></span></div></div>
+            </div>
+            <small style="margin-top:5px">Barra cinza = span criado pela auto-instrumentação. Todos os spans abaixo dela levam os itens da baggage.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="secao">O que mudou</h2>
+  <div class="rolagem">
+  <table>
+    <thead><tr><th></th><th>Módulo 2</th><th>Módulo 3</th></tr></thead>
+    <tbody>
+      <tr><td>Span da requisição</td><td>Criado na mão, em um middleware</td><td>Criado pela auto-instrumentação HTTP/Express</td></tr>
+      <tr><td>Configuração</td><td>Dentro do <code>app.js</code></td><td>Em <code>tracing.js</code>, carregado na primeira linha do <code>app.js</code></td></tr>
+      <tr><td>Trace do POST /orders</td><td>2 spans</td><td>5 spans em hierarquia, com a etapa mais lenta visível</td></tr>
+      <tr><td>Contexto do pedido</td><td>Atributos só no span raiz</td><td>Baggage levada a todos os spans filhos e aos logs</td></tr>
+      <tr><td>Momentos dentro do span</td><td>Não havia</td><td>Eventos: validação, gravação, novas tentativas, e-mail</td></tr>
+      <tr><td>Logs</td><td><code>trace_id</code></td><td><code>trace_id</code> + <code>span_id</code> + itens da baggage</td></tr>
+      <tr><td>Erros</td><td>5% aleatório no GET</td><td>Até 3 tentativas de gravação; depois, erro 500 marcado no span</td></tr>
+      <tr><td>Infraestrutura</td><td colspan="2" style="background:#fff3e0">Sem mudança: mesmas imagens, portas, Prometheus, Grafana e Jaeger</td></tr>
+    </tbody>
+  </table>
+  </div>
+</main>
+</body>
+</html>

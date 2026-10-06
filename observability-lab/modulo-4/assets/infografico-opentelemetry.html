@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTelemetry em uma página</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .cartao {
+    max-width: 1240px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px 26px 26px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+  h1 span { color: #1565c0; }
+  .subtitulo { font-size: 15px; color: #455a64; max-width: 760px; margin-top: 4px; }
+  .legenda { font-size: 12.5px; color: #546e7a; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+
+  .demo {
+    display: inline-block;
+    font-size: 10px; font-weight: 800; letter-spacing: .5px;
+    background: #2e7d32; color: #fff;
+    border-radius: 4px; padding: 1px 6px;
+    vertical-align: 1px; white-space: nowrap;
+  }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #78909c; margin: 22px 0 10px; }
+
+  /* Antes e depois */
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .bloco { border-radius: 12px; padding: 14px 16px; }
+  .bloco h3 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+  .antes { background: #ffebee; border-left: 6px solid #c62828; } .antes h3 { color: #c62828; }
+  .depois { background: #e8f5e9; border-left: 6px solid #2e7d32; } .depois h3 { color: #2e7d32; }
+  .mini { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; }
+  .mini span { background: #fff; border-radius: 6px; padding: 3px 8px; }
+  .mini i { font-style: normal; font-weight: 700; color: #78909c; }
+
+  /* Caminho da telemetria */
+  .caminho { display: grid; grid-template-columns: minmax(0, 1.15fr) 84px minmax(0, 1.15fr) 84px minmax(0, 1fr); align-items: stretch; }
+  .etapa { border: 2px solid #455a64; border-radius: 12px; padding: 12px 14px; background: #fff; }
+  .etapa h3 { font-size: 16px; font-weight: 800; }
+  .etapa > small { display: block; font-size: 12.5px; color: #546e7a; margin-bottom: 8px; }
+  .etapa.app { border-color: #1565c0; } .etapa.app h3 { color: #1565c0; }
+  .etapa.col { border-color: #ef6c00; border-style: dashed; } .etapa.col h3 { color: #e65100; }
+  .etapa.back { border-color: #2e7d32; } .etapa.back h3 { color: #2e7d32; }
+  .peca { display: block; background: #f5f7f8; border-radius: 8px; padding: 7px 10px; margin-top: 6px; font-size: 13px; }
+  .peca b { display: block; }
+  .peca.usado { background: #e8f5e9; }
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .trio .peca { text-align: center; }
+  .nota { font-size: 12.5px; color: #546e7a; margin-top: 8px; }
+
+  .liga { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 12px; color: #455a64; padding: 0 4px; }
+  .liga b { font-size: 14px; color: #263238; }
+  .liga .linha { position: relative; width: 100%; height: 3px; background: #455a64; margin: 6px 0; }
+  .liga .linha::after { content: ""; position: absolute; right: -1px; top: -5.5px; border: 7px solid transparent; border-left-color: #455a64; border-right: 0; }
+
+  /* Sinais */
+  .sinais { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .sinal { border-radius: 12px; padding: 12px 14px; background: #f5f7f8; border-top: 5px solid #455a64; }
+  .sinal h3 { font-size: 16px; font-weight: 800; }
+  .sinal p { font-size: 13px; margin-top: 4px; }
+  .estado { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border-radius: 4px; padding: 1px 6px; margin: 4px 0 2px; }
+  .estavel { background: #c8e6c9; color: #1b5e20; }
+  .alfa { background: #ffe0b2; color: #e65100; }
+  .sinal .na-demo { font-size: 12.5px; color: #2e7d32; font-weight: 600; margin-top: 6px; }
+  .sinal .fora { font-size: 12.5px; color: #78909c; margin-top: 6px; }
+
+  /* Cola e mitos */
+  .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .cola { border: 1.5px solid #cfd8dc; border-radius: 12px; padding: 12px 14px; }
+  .cola h3 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+  .cola pre { margin-top: 8px; background: #263238; color: #eceff1; border-radius: 8px; padding: 8px 10px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+  .mito { border-radius: 12px; padding: 12px 14px; background: #fff8e1; border-left: 5px solid #f9a825; }
+  .mito b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+
+  @media (max-width: 1000px) {
+    .caminho { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .liga .linha { width: 3px; height: 26px; }
+    .liga .linha::after { right: -5.5px; top: auto; bottom: -1px; border: 7px solid transparent; border-top-color: #455a64; border-bottom: 0; }
+    .sinais { grid-template-columns: repeat(2, 1fr); }
+    .tres { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 620px) {
+    .dupla, .sinais { grid-template-columns: minmax(0, 1fr); }
+    h1 { font-size: 23px; }
+    .cartao { padding: 18px 16px; }
+  }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <div>
+      <h1><span>OpenTelemetry</span> em uma página</h1>
+      <p class="subtitulo">Um padrão aberto e neutro para <b>gerar, coletar e enviar</b> telemetria. Não é um banco de dados nem uma tela: ele entrega os dados para a ferramenta que você escolher.</p>
+    </div>
+    <p class="legenda"><span class="demo">NA DEMO</span> o que já usamos na checkout-api</p>
+  </header>
+
+  <h2>O problema que ele resolve</h2>
+  <div class="dupla">
+    <div class="bloco antes">
+      <h3>Antes</h3>
+      <p>Cada ferramenta tinha seu agente, sua biblioteca e seu formato. Trocar de fornecedor significava instrumentar o código de novo.</p>
+      <div class="mini"><span>App</span><i>→</i><span>agente A</span><i>→</i><span>ferramenta A</span><i>+</i><span>agente B</span><i>→</i><span>ferramenta B</span></div>
+    </div>
+    <div class="bloco depois">
+      <h3>Com OpenTelemetry</h3>
+      <p>O código é instrumentado uma vez, com uma API padrão. O destino vira configuração: muda-se o exportador, não a aplicação.</p>
+      <div class="mini"><span>App + OTel</span><i>→</i><span>OTLP</span><i>→</i><span>qualquer backend compatível</span></div>
+    </div>
+  </div>
+
+  <h2>O caminho da telemetria</h2>
+  <div class="caminho">
+    <div class="etapa app">
+      <h3>1. Sua aplicação</h3>
+      <small>Onde os dados nascem</small>
+      <span class="peca usado"><b>API <span class="demo">NA DEMO</span></b>O que o código chama: <code>startSpan</code>, <code>addEvent</code>, <code>setAttribute</code></span>
+      <span class="peca usado"><b>SDK <span class="demo">NA DEMO</span></b>Implementa a API: sampler, processadores, exportador</span>
+      <span class="peca usado"><b>Instrumentação automática <span class="demo">NA DEMO</span></b>Cria spans de HTTP, Express, bancos e filas sem código seu</span>
+      <span class="peca usado"><b>Instrumentação manual <span class="demo">NA DEMO</span></b>Seus spans de negócio: <code>process_order</code>, <code>validate_order</code></span>
+      <span class="peca usado"><b>Resource <span class="demo">NA DEMO</span></b>Quem está enviando: <code>service.name</code>, <code>service.version</code></span>
+    </div>
+
+    <div class="liga"><b>OTLP</b><div class="linha"></div>protocolo padrão<br>gRPC :4317<br>HTTP :4318 <span class="demo">NA DEMO</span></div>
+
+    <div class="etapa col">
+      <h3>2. Collector <small style="display:inline;font-weight:400">(opcional)</small></h3>
+      <small>Um serviço à parte que recebe, trata e distribui</small>
+      <div class="trio">
+        <span class="peca"><b>Receivers</b>recebem</span>
+        <span class="peca"><b>Processors</b>tratam</span>
+        <span class="peca"><b>Exporters</b>enviam</span>
+      </div>
+      <span class="peca"><b>Para que serve</b>Agrupar em lotes, filtrar, mascarar dados sensíveis, fazer tail sampling e enviar para vários destinos ao mesmo tempo</span>
+      <p class="nota"><b>Na demo não usamos:</b> a aplicação envia direto ao Jaeger. Em produção, o Collector tira essas decisões de dentro do código.</p>
+    </div>
+
+    <div class="liga"><b>OTLP</b><div class="linha"></div>ou o formato<br>que o destino pedir</div>
+
+    <div class="etapa back">
+      <h3>3. Backends</h3>
+      <small>Onde os dados são guardados e consultados</small>
+      <span class="peca usado"><b>Jaeger <span class="demo">NA DEMO</span></b>traces</span>
+      <span class="peca"><b>Prometheus, Mimir, VictoriaMetrics</b>métricas</span>
+      <span class="peca"><b>Loki, OpenSearch</b>logs</span>
+      <span class="peca"><b>Plataformas e fornecedores</b>SigNoz, Grafana Cloud, Datadog, Dynatrace e outros</span>
+      <p class="nota">O OpenTelemetry <b>termina aqui</b>: armazenar, consultar e alertar é papel do backend.</p>
+    </div>
+  </div>
+
+  <h2>Os sinais</h2>
+  <div class="sinais">
+    <div class="sinal" style="border-top-color:#2e7d32">
+      <h3>Traces</h3><span class="estado estavel">estável</span>
+      <p>O caminho de uma requisição, em spans.</p>
+      <p class="na-demo">Na demo: SDK do OTel enviando ao Jaeger.</p>
+    </div>
+    <div class="sinal" style="border-top-color:#1565c0">
+      <h3>Métricas</h3><span class="estado estavel">estável</span>
+      <p>Números agregados ao longo do tempo.</p>
+      <p class="fora">Na demo: ainda com prom-client, fora do OTel.</p>
+    </div>
+    <div class="sinal" style="border-top-color:#455a64">
+      <h3>Logs</h3><span class="estado estavel">estável</span>
+      <p>Registros de eventos, ligados ao trace.</p>
+      <p class="fora">Na demo: Pino, com <code>trace_id</code> e <code>span_id</code> injetados.</p>
+    </div>
+    <div class="sinal" style="border-top-color:#ef6c00">
+      <h3>Profiles</h3><span class="estado alfa">alfa pública (2026)</span>
+      <p>Onde o código gasta CPU e memória, função por função.</p>
+      <p class="fora">O sinal mais novo; ainda não usamos.</p>
+    </div>
+    <div class="sinal" style="border-top-color:#6a1b9a">
+      <h3>Baggage</h3><span class="estado estavel">estável</span>
+      <p>Contexto que viaja junto com a requisição.</p>
+      <p class="na-demo">Na demo: customer_id, order_id, correlation_id.</p>
+    </div>
+  </div>
+
+  <h2>O que mantém tudo conectado</h2>
+  <div class="tres">
+    <div class="cola">
+      <h3>Propagação de contexto</h3>
+      <p>O <code>trace_id</code> passa de um serviço para o outro em um cabeçalho HTTP padrão (W3C). É o que une spans de serviços diferentes em um único trace.</p>
+      <pre>traceparent: 00-4bf92f35…4736-00f067aa0ba902b7-01</pre>
+    </div>
+    <div class="cola">
+      <h3>Convenções semânticas</h3>
+      <p>Nomes padronizados para os atributos. Como todos usam os mesmos nomes, qualquer ferramenta entende os dados sem configuração.</p>
+      <pre>http.request.method   http.route
+http.response.status_code   service.name</pre>
+    </div>
+    <div class="cola">
+      <h3>Novas frentes</h3>
+      <p><b>IA generativa:</b> convenções <code>gen_ai.*</code> para modelo, tokens e chamadas de ferramentas (em desenvolvimento).<br>
+      <b>eBPF (OBI):</b> instrumentação a partir do kernel, sem alterar o código da aplicação.</p>
+    </div>
+  </div>
+
+  <h2>Três confusões comuns</h2>
+  <div class="tres">
+    <div class="mito"><b>"OpenTelemetry substitui o Jaeger e o Prometheus."</b>Não. Ele gera e transporta os dados; essas ferramentas guardam e exibem.</div>
+    <div class="mito"><b>"Com auto-instrumentação, não preciso mexer no código."</b>Ela cobre o técnico (HTTP, banco). O que é do negócio, como <code>process_order</code>, só você sabe marcar.</div>
+    <div class="mito"><b>"Adotar OTel é trocar tudo de uma vez."</b>Não. Na demo, traces já são OTel, enquanto métricas e logs seguem com as bibliotecas anteriores.</div>
+  </div>
+</main>
+</body>
+</html>

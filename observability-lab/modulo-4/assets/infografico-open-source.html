@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observabilidade Open Source - Panorama</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .cartao {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px 26px 24px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+  .subtitulo { font-size: 15px; color: #455a64; margin-top: 4px; max-width: 720px; }
+
+  .filtros { display: flex; flex-wrap: wrap; gap: 8px; }
+  .filtro {
+    font: inherit; font-size: 13.5px; font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 2px solid #455a64;
+    background: #fff; color: #455a64;
+    cursor: pointer;
+  }
+  .filtro[aria-pressed="true"] { background: #455a64; color: #fff; }
+  .filtro:focus-visible { outline: 3px solid #90caf9; outline-offset: 2px; }
+
+  .legenda { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: #546e7a; margin-bottom: 14px; }
+  .selo { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: .5px; border-radius: 4px; padding: 1px 5px; vertical-align: 1px; white-space: nowrap; }
+  .s-demo { background: #2e7d32; color: #fff; }
+  .s-novo { background: #ef6c00; color: #fff; }
+  .s-cncf { background: #e3f2fd; color: #1565c0; }
+
+  /* Camadas */
+  .camada { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid #eceff1; }
+  .camada-titulo { border-left: 5px solid var(--cor); padding-left: 10px; }
+  .camada-titulo h2 { font-size: 15px; font-weight: 800; color: var(--cor); }
+  .camada-titulo p { font-size: 12.5px; color: #546e7a; margin-top: 2px; }
+  .grupos { display: grid; gap: 10px; }
+  .grupos.colunas { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grupo h3 { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #78909c; margin-bottom: 6px; }
+  .itens { display: flex; flex-wrap: wrap; gap: 8px; }
+  .colunas .itens { flex-direction: column; }
+
+  .item {
+    flex: 1 1 200px;
+    max-width: 290px;
+    border: 1.5px solid #cfd8dc;
+    border-radius: 10px;
+    padding: 7px 10px;
+    background: #fff;
+    transition: opacity .25s;
+  }
+  .colunas .item { flex: none; max-width: none; }
+  .item b { font-size: 14px; }
+  .item small { display: block; font-size: 12px; color: #546e7a; margin-top: 1px; }
+  .item.demo { border-color: #2e7d32; background: #e8f5e9; box-shadow: 0 2px 8px rgba(46, 125, 50, .2); }
+  .item.apagado { opacity: .15; }
+
+  .ia { background: #f3e5f5; border-radius: 12px; padding: 12px 14px; margin-top: 4px; border-top: 0; }
+  .ia .item { border-color: #ce93d8; }
+  .mede { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; font-size: 12.5px; }
+  .mede span { background: #fff; border-radius: 999px; padding: 3px 10px; }
+  .mede b { margin-right: 2px; color: #6a1b9a; }
+
+  .rodape { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; }
+  .rodape div { background: #f5f7f8; border-radius: 10px; padding: 10px 14px; }
+  .rodape b { display: block; margin-bottom: 2px; }
+  .fonte { font-size: 11.5px; color: #78909c; margin-top: 10px; }
+
+  @media (max-width: 1000px) {
+    .camada { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .grupos.colunas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rodape { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .grupos.colunas { grid-template-columns: minmax(0, 1fr); }
+    .item { max-width: none; }
+    h1 { font-size: 23px; }
+    .cartao { padding: 18px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .item { transition: none; } }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <div>
+      <h1>Observabilidade Open Source: o panorama</h1>
+      <p class="subtitulo">Do código até a tela, camada por camada. Em verde, o que já está rodando na nossa demo da checkout-api.</p>
+    </div>
+    <div class="filtros" role="group" aria-label="Filtrar ferramentas">
+      <button type="button" class="filtro" data-filtro="tudo" aria-pressed="true">Tudo</button>
+      <button type="button" class="filtro" data-filtro="demo" aria-pressed="false">Na demo</button>
+      <button type="button" class="filtro" data-filtro="novo" aria-pressed="false">Novidades</button>
+      <button type="button" class="filtro" data-filtro="ia" aria-pressed="false">IA</button>
+    </div>
+  </header>
+
+  <div class="legenda">
+    <span><span class="selo s-demo">NA DEMO</span> usamos na checkout-api</span>
+    <span><span class="selo s-novo">RECENTE</span> surgiu ou mudou bastante nos últimos dois anos</span>
+    <span><span class="selo s-cncf">CNCF</span> projeto da Cloud Native Computing Foundation</span>
+  </div>
+
+  <div id="panorama"></div>
+
+  <div class="rodape">
+    <div><b>Como ler</b>Não existe uma pilha única. O comum é combinar uma peça de cada camada, ou adotar uma plataforma "tudo em um". O OpenTelemetry é o que permite trocar peças sem reinstrumentar o código.</div>
+    <div><b>Atenção às licenças</b>"Código aberto" cobre licenças diferentes: Apache 2.0 e MIT (permissivas), AGPL (Grafana, Loki, Tempo, Mimir) e licenças de código disponível, como a Elastic License 2.0 do Phoenix. Confira antes de adotar.</div>
+  </div>
+  <p class="fonte">Retrato de outubro de 2026. O cenário muda rápido: confirme o estado de cada projeto na página oficial.</p>
+</main>
+
+<script>
+  // demo = usamos na checkout-api · novo = recente · cncf = projeto CNCF · ia = observabilidade de IA
+  var CAMADAS = [
+    {
+      titulo: '1. Instrumentação', cor: '#1565c0',
+      texto: 'Bibliotecas e agentes que geram a telemetria',
+      grupos: [{ itens: [
+        { n: 'OpenTelemetry SDK', d: 'API e SDK padrão para traces, métricas e logs', demo: 1, cncf: 1 },
+        { n: 'Auto-instrumentação OTel', d: 'Spans de HTTP, bancos e filas sem código', demo: 1, cncf: 1 },
+        { n: 'prom-client', d: 'Biblioteca de métricas Prometheus para Node.js', demo: 1 },
+        { n: 'Pino', d: 'Logs JSON estruturados para Node.js', demo: 1 },
+        { n: 'OBI (eBPF)', d: 'Instrumentação pelo kernel, sem tocar no código; nasceu do Grafana Beyla', novo: 1, cncf: 1 },
+        { n: 'Pixie', d: 'Telemetria de Kubernetes via eBPF', cncf: 1 }
+      ] }]
+    },
+    {
+      titulo: '2. Coleta e pipeline', cor: '#ef6c00',
+      texto: 'Recebem, tratam e encaminham os dados',
+      grupos: [{ itens: [
+        { n: 'OpenTelemetry Collector', d: 'Recebe, processa e exporta qualquer sinal', cncf: 1 },
+        { n: 'Grafana Alloy', d: 'Distribuição do Collector, sucessora do Grafana Agent', novo: 1 },
+        { n: 'Fluent Bit', d: 'Coletor leve de logs e métricas', cncf: 1 },
+        { n: 'Vector', d: 'Pipeline de dados de alto desempenho' }
+      ] }],
+      nota: 'Na demo não há coletor: a aplicação envia direto ao Jaeger via OTLP.'
+    },
+    {
+      titulo: '3. Armazenamento', cor: '#2e7d32', colunas: true,
+      texto: 'Um banco especializado para cada sinal',
+      grupos: [
+        { h: 'Métricas', itens: [
+          { n: 'Prometheus', d: 'Coleta por scrape e consulta com PromQL', demo: 1, cncf: 1 },
+          { n: 'Thanos', d: 'Prometheus com retenção longa', cncf: 1 },
+          { n: 'Grafana Mimir', d: 'Métricas em grande escala' },
+          { n: 'VictoriaMetrics', d: 'Compatível com Prometheus, econômico' }
+        ] },
+        { h: 'Logs', itens: [
+          { n: 'Grafana Loki', d: 'Indexa só os rótulos; barato de manter' },
+          { n: 'OpenSearch', d: 'Busca em texto completo' },
+          { n: 'VictoriaLogs', d: 'Logs com baixo consumo de recursos', novo: 1 }
+        ] },
+        { h: 'Traces', itens: [
+          { n: 'Jaeger', d: 'Traces distribuídos; a v2 é construída sobre o OTel Collector', demo: 1, cncf: 1 },
+          { n: 'Grafana Tempo', d: 'Traces em armazenamento de objetos' },
+          { n: 'Zipkin', d: 'O pioneiro, ainda em uso' }
+        ] },
+        { h: 'Profiles', itens: [
+          { n: 'Grafana Pyroscope', d: 'Profiling contínuo', novo: 1 },
+          { n: 'Parca', d: 'Profiling contínuo via eBPF' }
+        ] }
+      ]
+    },
+    {
+      titulo: '4. Visualização e alertas', cor: '#455a64',
+      texto: 'Onde as pessoas consultam e são avisadas',
+      grupos: [{ itens: [
+        { n: 'Grafana', d: 'Dashboards sobre várias fontes de dados', demo: 1 },
+        { n: 'Jaeger UI', d: 'Busca e timeline de traces', demo: 1, cncf: 1 },
+        { n: 'Perses', d: 'Dashboards como código', novo: 1, cncf: 1 },
+        { n: 'Alertmanager', d: 'Agrupa e roteia alertas do Prometheus', cncf: 1 },
+        { n: 'OpenSearch Dashboards', d: 'Exploração de logs' }
+      ] }]
+    },
+    {
+      titulo: 'Plataformas "tudo em um"', cor: '#00838f',
+      texto: 'Logs, métricas e traces em um só produto, nativas em OpenTelemetry',
+      grupos: [{ itens: [
+        { n: 'SigNoz', d: 'Alternativa aberta às plataformas comerciais' },
+        { n: 'OpenObserve', d: 'Um único motor, consultas em SQL', novo: 1 },
+        { n: 'ClickStack', d: 'ClickHouse + HyperDX + OTel Collector', novo: 1 },
+        { n: 'Coroot', d: 'Mapa de serviços e causa raiz via eBPF', novo: 1 }
+      ] }]
+    },
+    {
+      titulo: 'Observabilidade de IA', cor: '#6a1b9a', ia: true,
+      texto: 'Para aplicações com LLMs e agentes: a mesma ideia de trace, com novas perguntas',
+      grupos: [
+        { h: 'Instrumentação (gera spans de chamadas a modelos)', itens: [
+          { n: 'OTel GenAI', d: 'Convenções gen_ai.* para modelo, tokens e ferramentas; em desenvolvimento', novo: 1, cncf: 1 },
+          { n: 'OpenLLMetry', d: 'Auto-instrumentação de LLMs e frameworks sobre OTel', novo: 1 },
+          { n: 'OpenLIT', d: 'SDK nativo em OTel para LLMs, bancos vetoriais e GPUs', novo: 1 }
+        ] },
+        { h: 'Plataformas (traces, avaliação e gestão de prompts)', itens: [
+          { n: 'Langfuse', d: 'Tracing, avaliações e prompts; a mais adotada', novo: 1 },
+          { n: 'Arize Phoenix', d: 'Tracing e avaliação, forte em RAG', novo: 1 },
+          { n: 'Opik', d: 'Tracing com métricas de avaliação prontas', novo: 1 },
+          { n: 'MLflow Tracing', d: 'Tracing de GenAI dentro do MLflow', novo: 1 },
+          { n: 'Helicone', d: 'Proxy que registra custo e latência por chamada', novo: 1 }
+        ] }
+      ],
+      mede: ['tokens e custo por chamada', 'latência e tempo até o primeiro token', 'prompt e resposta', 'chamadas de ferramentas dos agentes', 'qualidade: avaliações e alucinações']
+    }
+  ];
+
+  function selos(i) {
+    return (i.demo ? ' <span class="selo s-demo">NA DEMO</span>' : '') +
+           (i.novo ? ' <span class="selo s-novo">RECENTE</span>' : '') +
+           (i.cncf ? ' <span class="selo s-cncf">CNCF</span>' : '');
+  }
+
+  document.getElementById('panorama').innerHTML = CAMADAS.map(function (c) {
+    var grupos = c.grupos.map(function (g) {
+      return '<div class="grupo">' + (g.h ? '<h3>' + g.h + '</h3>' : '') + '<div class="itens">' +
+        g.itens.map(function (i) {
+          return '<div class="item' + (i.demo ? ' demo' : '') + '" data-demo="' + (i.demo || 0) + '" data-novo="' + (i.novo || 0) + '" data-ia="' + (c.ia ? 1 : 0) + '">' +
+            '<b>' + i.n + '</b>' + selos(i) + '<small>' + i.d + '</small></div>';
+        }).join('') + '</div></div>';
+    }).join('');
+    var extra = '';
+    if (c.nota) extra += '<p style="font-size:12.5px;color:#546e7a;margin-top:8px">' + c.nota + '</p>';
+    if (c.mede) extra += '<div class="mede"><b>O que medem além do habitual:</b>' + c.mede.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</div>';
+    return '<section class="camada' + (c.ia ? ' ia' : '') + '" style="--cor:' + c.cor + '">' +
+      '<div class="camada-titulo"><h2>' + c.titulo + '</h2><p>' + c.texto + '</p></div>' +
+      '<div><div class="grupos' + (c.colunas ? ' colunas' : '') + '">' + grupos + '</div>' + extra + '</div></section>';
+  }).join('');
+
+  var botoes = document.querySelectorAll('.filtro');
+  botoes.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = b.dataset.filtro;
+      botoes.forEach(function (o) { o.setAttribute('aria-pressed', o === b); });
+      document.querySelectorAll('.item').forEach(function (el) {
+        el.classList.toggle('apagado', f !== 'tudo' && el.dataset[f] !== '1');
+      });
+    });
+  });
+</script>
+</body>
+</html>
