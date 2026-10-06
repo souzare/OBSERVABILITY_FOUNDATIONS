@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do Código ao Sinal - Módulo 2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    padding: 16px;
+  }
+  .cartao {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px 24px 24px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+  header p { font-size: 13px; color: #546e7a; margin-top: 2px; }
+
+  .abas { display: flex; flex-wrap: wrap; gap: 8px; }
+  .aba {
+    --cor: #455a64;
+    font: inherit; font-size: 14px; font-weight: 700;
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 2px solid var(--cor);
+    background: #fff;
+    color: var(--cor);
+    cursor: pointer;
+  }
+  .aba[aria-selected="true"] { background: var(--cor); color: #fff; }
+  .aba:focus-visible { outline: 3px solid #90caf9; outline-offset: 2px; }
+
+  .painel { --cor: #455a64; display: none; }
+  .painel.ativo { display: block; }
+  .ideia { border-left: 5px solid var(--cor); background: #f5f7f8; border-radius: 8px; padding: 10px 14px; font-size: 15px; line-height: 1.45; margin-bottom: 14px; }
+  .colunas { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #78909c; margin-bottom: 8px; }
+
+  .passo { margin-bottom: 14px; }
+  .passo-titulo { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .num { width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--cor); color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .onde { margin-left: auto; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11px; font-weight: 400; color: #78909c; white-space: nowrap; }
+
+  pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.65;
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  pre.codigo { background: #263238; color: #eceff1; }
+  pre.saida { background: #f5f7f8; color: #263238; border: 1px solid #cfd8dc; }
+  .ln { display: inline-block; width: 30px; margin-right: 12px; text-align: right; color: #78909c; user-select: none; }
+  .coment { color: #90a4ae; }
+
+  /* Trechos ligados entre o código e o resultado */
+  .k { border-bottom: 2px dotted var(--cor); cursor: pointer; border-radius: 3px; transition: background .15s, color .15s; }
+  pre.codigo .k { border-bottom-color: #ffd54f; }
+  .k.aceso { background: #ffd54f; color: #263238; border-bottom-color: transparent; box-shadow: 0 0 0 2px #ffd54f; }
+
+  .resultado { position: sticky; top: 16px; }
+  .ferramenta { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--cor); margin-bottom: 6px; }
+  .ferramenta code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; font-weight: 400; color: #546e7a; background: #f5f7f8; padding: 2px 8px; border-radius: 6px; }
+  .nota { font-size: 13px; line-height: 1.5; color: #455a64; margin-top: 10px; }
+  .nota b { color: #263238; }
+
+  /* Mini Jaeger */
+  .jaeger { border: 1px solid #cfd8dc; border-radius: 10px; overflow: hidden; font-size: 13px; }
+  .j-topo { background: #f5f7f8; padding: 10px 14px; border-bottom: 1px solid #cfd8dc; }
+  .j-topo b { font-size: 15px; }
+  .j-linha { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: center; padding: 8px 14px; }
+  .j-linha + .j-linha { border-top: 1px solid #eceff1; }
+  .j-nome { font-weight: 600; }
+  .j-nome.filho { padding-left: 18px; font-weight: 400; }
+  .j-trilho { position: relative; height: 18px; background: #f5f7f8; border-radius: 4px; }
+  .j-barra { position: absolute; top: 3px; height: 12px; border-radius: 3px; background: #2e7d32; }
+  .j-barra.filho { background: #81c784; }
+  .j-dur { position: absolute; right: 6px; top: 0; font-size: 11px; line-height: 18px; color: #263238; }
+  .j-tags { padding: 10px 14px; border-top: 1px solid #cfd8dc; background: #fafbfc; }
+  .j-tags h3 { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #78909c; margin-bottom: 6px; }
+  .tag { display: inline-block; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; background: #e8f5e9; border-radius: 6px; padding: 3px 8px; margin: 0 6px 6px 0; }
+
+  @media (max-width: 900px) {
+    .colunas { grid-template-columns: minmax(0, 1fr); }
+    .resultado { position: static; }
+    .onde { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .k { transition: none; } }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <div>
+      <h1>Do Código ao Sinal</h1>
+      <p>Passe o mouse (ou clique) nos trechos sublinhados: o que está no código acende no resultado</p>
+    </div>
+    <div class="abas" role="tablist">
+      <button type="button" class="aba" role="tab" data-aba="logs" aria-selected="true" style="--cor:#455a64">Logs</button>
+      <button type="button" class="aba" role="tab" data-aba="metricas" aria-selected="false" style="--cor:#1565c0">Métricas</button>
+      <button type="button" class="aba" role="tab" data-aba="traces" aria-selected="false" style="--cor:#2e7d32">Traces</button>
+    </div>
+  </header>
+
+  <!-- ======================= LOGS ======================= -->
+  <section class="painel ativo" id="logs" style="--cor:#455a64">
+    <p class="ideia">Nenhum log aparece sozinho. Cada campo que vemos no terminal foi <b>escolhido e escrito por alguém no código</b>. Se o campo não está no código, ele não existe na hora do incidente.</p>
+    <div class="colunas">
+      <div>
+        <h2>O que escrevemos em app.js</h2>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">1</span>Configurar o logger: formato JSON <span class="onde">app.js:50-55</span></div>
+<pre class="codigo" data-inicio="50">const logger = pino({
+  base: { [[service|service: SERVICE_NAME]] },
+  [[message|messageKey: 'message']],
+  [[timestamp|timestamp]]: () => `,"timestamp":"${new Date().toISOString()}"`,
+  formatters: { [[level|level]]: (label) => ({ level: label }) },
+});</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">2</span>Dar contexto a cada requisição <span class="onde">app.js:111-117</span></div>
+<pre class="codigo" data-inicio="111">  const log = logger.child({
+    [[trace_id|trace_id: span.spanContext().traceId]],
+    [[sampled|sampled]],
+    [[correlation_id|correlation_id]]: req.get('x-correlation-id') || crypto.randomUUID(),
+    [[method|method: req.method]],
+    [[endpoint|endpoint: req.path]],
+  });</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">3</span>Registrar o resultado ao final <span class="onde">app.js:130-134</span></div>
+<pre class="codigo" data-inicio="130">    const nivel = status >= 500 ? 'error' : status >= 400 ? 'warn' : [[level|'info']];
+    log[nivel](
+      { [[status|status]], [[duration_ms|duration_ms: duracaoMs]], [[customer_id|customer_id]]: res.locals.customer_id, [[order_id|order_id]]: res.locals.order_id },
+      [[message|'requisição finalizada']]
+    );</pre>
+        </div>
+      </div>
+
+      <div class="resultado">
+        <h2>O que aparece</h2>
+        <div class="ferramenta">Terminal <code>sudo docker logs -f modulo-2-app-1</code></div>
+<pre class="saida">{
+  [[level|"level": "info"]],
+  [[timestamp|"timestamp": "2026-10-05T11:54:41.778Z"]],
+  [[service|"service": "checkout-api"]],
+  [[trace_id|"trace_id": "aae6acabbcec485405a8d42772351996"]],
+  [[sampled|"sampled": true]],
+  [[correlation_id|"correlation_id": "d559e416-f621-457c-b5b5-82426dd179c6"]],
+  [[method|"method": "GET"]],
+  [[endpoint|"endpoint": "/orders/ORD-6d0bb578"]],
+  [[status|"status": 200]],
+  [[duration_ms|"duration_ms": 55]],
+  [[customer_id|"customer_id": "CUST-295"]],
+  [[order_id|"order_id": "ORD-6d0bb578"]],
+  [[message|"message": "requisição finalizada"]]
+}</pre>
+        <p class="nota">No terminal a linha vem compacta; aqui está quebrada para facilitar a leitura.<br>
+        <b>Repare no trace_id:</b> ele vem do span criado pelo OpenTelemetry. É essa linha de código que permite sair de um log de erro e cair direto no trace no Jaeger.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= MÉTRICAS ======================= -->
+  <section class="painel" id="metricas" style="--cor:#1565c0">
+    <p class="ideia">A aplicação não envia métricas: ela <b>conta</b> em memória e <b>publica</b> os totais em <code>/metrics</code>. O Prometheus passa a cada 5 segundos, lê a página e guarda o histórico.</p>
+    <div class="colunas">
+      <div>
+        <h2>O que escrevemos em app.js</h2>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">1</span>Declarar a métrica e seus labels <span class="onde">app.js:60-64</span></div>
+<pre class="codigo" data-inicio="60">const httpRequestsTotal = new prom.[[tipo|Counter]]({
+  name: [[nome|'http_requests_total']],
+  help: [[help|'Total de requisições HTTP recebidas']],
+  labelNames: [[[method|'method']], [[endpoint|'endpoint']], [[status|'status']]],
+});</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">2</span>Somar 1 a cada requisição finalizada <span class="onde">app.js:137-139</span></div>
+<pre class="codigo" data-inicio="137">    const labels = { [[method|method: req.method]], [[endpoint|endpoint]], [[status|status]] };
+    httpRequestsTotal.[[valor|inc(labels)]];
+    httpRequestDuration.[[hist|observe(labels, duracaoMs / 1000)]];</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">3</span>Publicar para o Prometheus buscar <span class="onde">app.js:219-222</span></div>
+<pre class="codigo" data-inicio="219">app.get([[rota|'/metrics']], async (req, res) => {
+  res.set('Content-Type', prom.register.contentType);
+  res.send(await prom.register.metrics());
+});</pre>
+        </div>
+      </div>
+
+      <div class="resultado">
+        <h2>O que aparece</h2>
+        <div class="ferramenta">Navegador <code>http://ENDERECO:3000<span class="k" data-k="rota">/metrics</span></code></div>
+<pre class="saida"># HELP http_requests_total [[help|Total de requisições HTTP recebidas]]
+# TYPE http_requests_total [[tipo|counter]]
+[[nome|http_requests_total]]{[[method|method="POST"]],[[endpoint|endpoint="/orders"]],[[status|status="201"]]} [[valor|123]]
+[[nome|http_requests_total]]{[[method|method="GET"]],[[endpoint|endpoint="/orders/:id"]],[[status|status="200"]]} [[valor|111]]
+[[nome|http_requests_total]]{[[method|method="GET"]],[[endpoint|endpoint="/orders/:id"]],[[status|status="500"]]} [[valor|6]]
+[[nome|http_requests_total]]{[[method|method="POST"]],[[endpoint|endpoint="/orders"]],[[status|status="400"]]} [[valor|4]]
+
+[[hist|http_request_duration_seconds_bucket]]{le="0.5",...} ...
+[[hist|http_request_duration_seconds_sum]]{...} ...
+[[hist|http_request_duration_seconds_count]]{...} ...</pre>
+        <div class="ferramenta" style="margin-top:14px">Prometheus <code>porta 9090</code></div>
+<pre class="saida">sum by ([[endpoint|endpoint]], [[status|status]]) (rate([[nome|http_requests_total]][1m]))</pre>
+        <p class="nota"><b>Cada combinação de labels vira uma série.</b> Por isso o label <code>endpoint</code> usa a rota (<code>/orders/:id</code>) e não o caminho real: um valor por pedido criaria milhares de séries.<br>
+        Só é possível filtrar e agrupar pelos labels que foram declarados no passo 1.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= TRACES ======================= -->
+  <section class="painel" id="traces" style="--cor:#2e7d32">
+    <p class="ideia">Um trace é um conjunto de <b>spans</b>. Cada span é um trecho de código que alguém marcou com "começa aqui" e "termina aqui". A barra no Jaeger é exatamente o tempo entre essas duas linhas.</p>
+    <div class="colunas">
+      <div>
+        <h2>O que escrevemos em app.js</h2>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">1</span>Dizer quem somos e para onde enviar <span class="onde">app.js:30-43</span></div>
+<pre class="codigo" data-inicio="30">const sdk = new NodeSDK({
+  resource: resourceFromAttributes({
+    [[servico|'service.name': SERVICE_NAME]],
+    'service.version': SERVICE_VERSION,
+  }),
+  // O Jaeger recebe os spans pelo protocolo OTLP (HTTP, porta 4318)
+  traceExporter: new OTLPTraceExporter({ url: `${OTLP_ENDPOINT}/v1/traces` }),
+  // SAMPLING: a decisão é tomada no início da requisição (head sampling), a partir do trace_id.
+  // Os spans filhos seguem a decisão do span raiz (ParentBased).
+  sampler: new tracing.ParentBasedSampler({
+    root: new tracing.TraceIdRatioBasedSampler(TRACE_SAMPLE_RATE),
+  }),
+});
+sdk.start();</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">2</span>Abrir o span raiz quando a requisição chega <span class="onde">app.js:102</span></div>
+<pre class="codigo" data-inicio="102">  const span = tracer.[[raiz|startSpan]](`${req.method} ${req.path}`, { kind: SpanKind.SERVER });</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">3</span>Completar e fechar quando a resposta sai <span class="onde">app.js:142-151</span></div>
+<pre class="codigo" data-inicio="142">    span.[[nome|updateName(`${req.method} ${endpoint}`)]];
+    span.setAttributes({
+      [[method|method: req.method]],
+      [[endpoint|endpoint]],
+      [[status|'http.status_code': status]],
+      [[customer_id|customer_id: res.locals.customer_id]],
+      [[order_id|order_id: res.locals.order_id]],
+    });
+    if (status >= 500) span.setStatus({ code: SpanStatusCode.ERROR });
+    span.[[raiz|end()]];</pre>
+        </div>
+
+        <div class="passo">
+          <div class="passo-titulo"><span class="num">4</span>Marcar um trecho interno (span filho) <span class="onde">app.js:177-181</span></div>
+<pre class="codigo" data-inicio="177">  await tracer.[[filho|startActiveSpan]]([[filhonome|'processar-pedido']], async (span) => {
+    span.setAttribute([[amount|'amount', amount]]);
+    await esperar(aleatorio(100, 500));
+    span.[[filho|end()]];
+  });</pre>
+        </div>
+      </div>
+
+      <div class="resultado">
+        <h2>O que aparece</h2>
+        <div class="ferramenta">Jaeger <code>porta 16686</code></div>
+        <div class="jaeger">
+          <div class="j-topo"><b><span class="k" data-k="servico">checkout-api</span>: <span class="k" data-k="nome">POST /orders</span></b> &nbsp; 460 ms · 2 spans</div>
+          <div class="j-linha">
+            <div class="j-nome"><span class="k" data-k="nome">POST /orders</span></div>
+            <div class="j-trilho"><div class="j-barra k" data-k="raiz" style="left:0;width:100%"></div><span class="j-dur">460 ms</span></div>
+          </div>
+          <div class="j-linha">
+            <div class="j-nome filho"><span class="k" data-k="filhonome">processar-pedido</span></div>
+            <div class="j-trilho"><div class="j-barra filho k" data-k="filho" style="left:0;width:99.6%"></div><span class="j-dur">459 ms</span></div>
+          </div>
+          <div class="j-tags">
+            <h3>Tags do span POST /orders</h3>
+            <span class="tag k" data-k="method">method = POST</span>
+            <span class="tag k" data-k="endpoint">endpoint = /orders</span>
+            <span class="tag k" data-k="status">http.status_code = 201</span>
+            <span class="tag k" data-k="customer_id">customer_id = CUST-96</span>
+            <span class="tag k" data-k="order_id">order_id = ORD-1f336ba0</span>
+            <h3 style="margin-top:6px">Tags do span processar-pedido</h3>
+            <span class="tag k" data-k="amount">amount = 980</span>
+          </div>
+        </div>
+        <p class="nota"><b>Sem o passo 4</b> o trace teria uma única barra: saberíamos que a requisição demorou 460 ms, mas não onde. Quanto mais trechos marcamos, mais detalhada fica a história.<br>
+        O Jaeger só permite buscar por <code>customer_id</code> porque o passo 3 gravou esse atributo.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Transforma os <pre>: [[chave|texto]] vira um trecho clicável e cada linha de código ganha seu número
+  function escapar(t) {
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var html = escapar(pre.textContent).replace(/\[\[([\w.]+)\|([^\]]+?)\]\]/g, '<span class="k" data-k="$1">$2</span>');
+    if (pre.dataset.inicio) {
+      var n = +pre.dataset.inicio;
+      html = html.split('\n').map(function (linha, i) {
+        var texto = /^\s*\/\//.test(linha) ? '<span class="coment">' + linha + '</span>' : linha;
+        return '<span class="ln">' + (n + i) + '</span>' + texto;
+      }).join('\n');
+    }
+    pre.innerHTML = html;
+  });
+
+  // Acende, no painel atual, todos os trechos com a mesma chave
+  var fixo = null;
+  function acender(painel, chave) {
+    painel.querySelectorAll('.k').forEach(function (el) {
+      el.classList.toggle('aceso', chave !== null && el.dataset.k === chave);
+    });
+  }
+  document.querySelectorAll('.painel').forEach(function (painel) {
+    painel.addEventListener('mouseover', function (e) {
+      var k = e.target.closest('.k');
+      if (k) acender(painel, k.dataset.k);
+    });
+    painel.addEventListener('mouseout', function (e) {
+      if (e.target.closest('.k')) acender(painel, fixo);
+    });
+    painel.addEventListener('click', function (e) {
+      var k = e.target.closest('.k');
+      fixo = k && fixo !== k.dataset.k ? k.dataset.k : null;
+      acender(painel, fixo);
+    });
+  });
+
+  // Abas
+  var abas = document.querySelectorAll('.aba');
+  abas.forEach(function (aba) {
+    aba.addEventListener('click', function () {
+      fixo = null;
+      abas.forEach(function (a) { a.setAttribute('aria-selected', a === aba); });
+      document.querySelectorAll('.painel').forEach(function (p) {
+        p.classList.toggle('ativo', p.id === aba.dataset.aba);
+        acender(p, null);
+      });
+    });
+  });
+</script>
+</body>
+</html>

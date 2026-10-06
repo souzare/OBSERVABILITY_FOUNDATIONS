@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sampling de Traces - Módulo 2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    padding: 16px;
+  }
+  .cartao {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px 24px 24px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+  header p { font-size: 13px; color: #546e7a; margin-top: 2px; }
+
+  .taxas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .taxas span { font-size: 13px; font-weight: 600; color: #546e7a; }
+  .taxa {
+    font: inherit; font-size: 14px; font-weight: 700;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 2px solid #2e7d32;
+    background: #fff;
+    color: #2e7d32;
+    cursor: pointer;
+  }
+  .taxa[aria-pressed="true"] { background: #2e7d32; color: #fff; }
+  .taxa:focus-visible { outline: 3px solid #90caf9; outline-offset: 2px; }
+
+  .lados { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .lado { border-radius: 12px; padding: 16px 18px; background: #f5f7f8; border-top: 6px solid #455a64; }
+  .lado.com { border-top-color: #2e7d32; }
+  h2 { font-size: 17px; font-weight: 800; }
+  .lado code, .regra code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; background: #fff; padding: 2px 8px; border-radius: 6px; }
+  .sub { font-size: 13px; color: #546e7a; margin: 4px 0 12px; }
+
+  .pontos { display: grid; grid-template-columns: repeat(20, 1fr); gap: 5px; }
+  .ponto { aspect-ratio: 1; border-radius: 50%; background: #2e7d32; transition: opacity .35s, transform .35s; }
+  .ponto.erro { background: #c62828; }
+  .ponto.fora { opacity: .14; transform: scale(.7); }
+
+  .numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+  .numero { background: #fff; border-radius: 8px; padding: 8px 10px; }
+  .numero b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .numero small { font-size: 12px; color: #546e7a; }
+  .numero.alerta b { color: #c62828; }
+
+  .legenda { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: #546e7a; margin-top: 12px; }
+  .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+  .regra { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px; line-height: 1.65;
+    background: #263238; color: #eceff1;
+    border-radius: 10px; padding: 12px 14px; overflow-x: auto;
+  }
+  pre .c { color: #90a4ae; }
+  pre .v { background: #ffd54f; color: #263238; border-radius: 3px; padding: 0 3px; }
+  .rotulo { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #78909c; margin-bottom: 8px; }
+  .regra ul { list-style: none; display: grid; gap: 8px; }
+  .regra li { font-size: 14px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; background: #f5f7f8; border-left: 4px solid #2e7d32; }
+  .regra li.atencao { border-left-color: #c62828; }
+
+  @media (max-width: 820px) {
+    .lados, .regra { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) { .ponto { transition: none; } }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <div>
+      <h1>Sampling de Traces</h1>
+      <p>As mesmas 200 requisições, com e sem amostragem. Escolha a taxa e veja o que chega ao Jaeger.</p>
+    </div>
+    <div class="taxas" role="group" aria-label="Taxa de amostragem">
+      <span>TRACE_SAMPLE_RATE =</span>
+      <button type="button" class="taxa" data-taxa="0.5" aria-pressed="false">0.5</button>
+      <button type="button" class="taxa" data-taxa="0.1" aria-pressed="true">0.1</button>
+      <button type="button" class="taxa" data-taxa="0.01" aria-pressed="false">0.01</button>
+    </div>
+  </header>
+
+  <div class="lados">
+    <section class="lado">
+      <h2>Sem sampling <code>1.0</code></h2>
+      <p class="sub">Todo trace é gravado e enviado.</p>
+      <div class="pontos" id="pontos-sem" aria-hidden="true"></div>
+      <div class="numeros">
+        <div class="numero"><b id="sem-traces">200</b><small>traces no Jaeger</small></div>
+        <div class="numero"><b id="sem-erros">10 de 10</b><small>erros com trace</small></div>
+        <div class="numero"><b>100%</b><small>do custo de envio e armazenamento</small></div>
+      </div>
+    </section>
+
+    <section class="lado com">
+      <h2>Com sampling <code id="com-taxa">0.1</code></h2>
+      <p class="sub" id="com-sub"></p>
+      <div class="pontos" id="pontos-com" aria-hidden="true"></div>
+      <div class="numeros">
+        <div class="numero"><b id="com-traces"></b><small>traces no Jaeger</small></div>
+        <div class="numero alerta"><b id="com-erros"></b><small>erros com trace</small></div>
+        <div class="numero"><b id="com-custo"></b><small>do custo de envio e armazenamento</small></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="legenda">
+    <span><i style="background:#2e7d32"></i>requisição com sucesso</span>
+    <span><i style="background:#c62828"></i>requisição com erro (5%)</span>
+    <span><i style="background:#90a4ae;opacity:.4"></i>apagado = trace descartado, não existe no Jaeger</span>
+  </div>
+
+  <div class="regra">
+    <div>
+      <div class="rotulo">A regra no código (app.js)</div>
+<pre><span class="c">// A decisão é tomada no início da requisição, a partir do trace_id</span>
+sampler: new tracing.ParentBasedSampler({
+  root: new tracing.TraceIdRatioBasedSampler(<span class="v">TRACE_SAMPLE_RATE</span>),
+}),
+
+<span class="c"># .env</span>
+TRACE_SAMPLE_RATE=<span class="v" id="codigo-taxa">0.1</span></pre>
+    </div>
+    <ul>
+      <li><b>Head sampling:</b> a escolha acontece quando a requisição chega, antes de sabermos se ela vai dar erro ou ficar lenta.</li>
+      <li><b>ParentBased:</b> os spans filhos seguem a decisão do span raiz. O trace é guardado inteiro ou descartado inteiro, nunca pela metade.</li>
+      <li class="atencao" id="licao"></li>
+      <li><b>Métricas e logs continuam em 100%.</b> O sampling só reduz traces: os contadores do Prometheus seguem exatos.</li>
+    </ul>
+  </div>
+</main>
+
+<script>
+  // 200 requisições fixas. Cada uma tem um "sorteio" entre 0 e 1 derivado do trace_id:
+  // ela é amostrada quando o sorteio é menor que a taxa. Por isso o resultado é sempre o mesmo.
+  var TOTAL = 200, semente = 2723;
+  function sorteio() { semente = (semente * 16807) % 2147483647; return semente / 2147483647; }
+  var requisicoes = [];
+  for (var i = 0; i < TOTAL; i++) requisicoes.push({ valor: sorteio(), erro: false });
+  // 10 erros (5%) em posições espalhadas
+  [9, 27, 46, 71, 88, 104, 123, 149, 166, 191].forEach(function (p) { requisicoes[p].erro = true; });
+
+  function criarPontos(id) {
+    var caixa = document.getElementById(id);
+    return requisicoes.map(function (r) {
+      var p = document.createElement('span');
+      p.className = 'ponto' + (r.erro ? ' erro' : '');
+      caixa.appendChild(p);
+      return p;
+    });
+  }
+  criarPontos('pontos-sem');
+  var pontosCom = criarPontos('pontos-com');
+
+  function aplicar(taxa) {
+    var guardados = 0, errosGuardados = 0;
+    requisicoes.forEach(function (r, i) {
+      var dentro = r.valor < taxa;
+      pontosCom[i].classList.toggle('fora', !dentro);
+      if (dentro) { guardados++; if (r.erro) errosGuardados++; }
+    });
+    var perdidos = 10 - errosGuardados;
+    document.getElementById('com-taxa').textContent = taxa;
+    document.getElementById('codigo-taxa').textContent = taxa;
+    document.getElementById('com-sub').textContent = 'Cerca de ' + (taxa * 100) + '% dos traces são gravados; o resto é descartado na origem.';
+    document.getElementById('com-traces').textContent = guardados;
+    document.getElementById('com-erros').textContent = errosGuardados + ' de 10';
+    document.getElementById('com-custo').textContent = '~' + (taxa * 100) + '%';
+    document.getElementById('licao').innerHTML = '<b>O preço:</b> ' + perdidos + ' dos 10 erros ficaram sem trace. ' +
+      'O log do erro existe, com trace_id, mas a busca no Jaeger não encontra nada. ' +
+      'Guardar sempre os erros exige decidir no fim da requisição (tail sampling).';
+    document.querySelectorAll('.taxa').forEach(function (b) {
+      b.setAttribute('aria-pressed', +b.dataset.taxa === taxa);
+    });
+  }
+
+  document.querySelectorAll('.taxa').forEach(function (b) {
+    b.addEventListener('click', function () { aplicar(+b.dataset.taxa); });
+  });
+  aplicar(0.1);
+</script>
+</body>
+</html>

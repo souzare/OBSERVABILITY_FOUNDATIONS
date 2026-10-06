@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const express = require('express');
 const pino = require('pino');
 const prom = require('prom-client');
-const { NodeSDK } = require('@opentelemetry/sdk-node');
+const { NodeSDK, tracing } = require('@opentelemetry/sdk-node');
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 const { resourceFromAttributes } = require('@opentelemetry/resources');
 const { trace, context, SpanKind, SpanStatusCode } = require('@opentelemetry/api');
@@ -22,6 +22,7 @@ const SERVICE_NAME = process.env.SERVICE_NAME || 'checkout-api';
 const SERVICE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 const OTLP_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
 const ERROR_RATE = Number(process.env.ERROR_RATE || 0.05);
+const TRACE_SAMPLE_RATE = Number(process.env.TRACE_SAMPLE_RATE || 1); // 1 = 100% dos traces
 
 // =============================================================
 // PILAR 1: TRACES (OpenTelemetry)
@@ -33,6 +34,11 @@ const sdk = new NodeSDK({
   }),
   // O Jaeger recebe os spans pelo protocolo OTLP (HTTP, porta 4318)
   traceExporter: new OTLPTraceExporter({ url: `${OTLP_ENDPOINT}/v1/traces` }),
+  // SAMPLING: a decisão é tomada no início da requisição (head sampling), a partir do trace_id.
+  // Os spans filhos seguem a decisão do span raiz (ParentBased).
+  sampler: new tracing.ParentBasedSampler({
+    root: new tracing.TraceIdRatioBasedSampler(TRACE_SAMPLE_RATE),
+  }),
 });
 sdk.start();
 
@@ -64,6 +70,12 @@ const httpRequestDuration = new prom.Histogram({
   buckets: [0.01, 0.05, 0.1, 0.5, 1, 2],
 });
 
+const tracesTotal = new prom.Counter({
+  name: 'traces_total',
+  help: 'Traces iniciados, separados entre amostrados (enviados ao Jaeger) e descartados',
+  labelNames: ['sampled'],
+});
+
 const ordersPending = new prom.Gauge({
   name: 'orders_pending',
   help: 'Pedidos criados que ainda aguardam confirmação',
@@ -90,10 +102,15 @@ app.use((req, res, next) => {
   const span = tracer.startSpan(`${req.method} ${req.path}`, { kind: SpanKind.SERVER });
   res.locals.span = span;
 
+  // SAMPLING: se o trace não foi amostrado, o span existe mas não grava nem é enviado
+  const sampled = span.isRecording();
+  tracesTotal.inc({ sampled });
+
   // Campos comuns a todos os logs desta requisição.
   // O trace_id é a "cola" entre o log e o trace no Jaeger.
   const log = logger.child({
     trace_id: span.spanContext().traceId,
+    sampled,
     correlation_id: req.get('x-correlation-id') || crypto.randomUUID(),
     method: req.method,
     endpoint: req.path,
@@ -213,7 +230,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  logger.info({ port: PORT, otlp_endpoint: OTLP_ENDPOINT }, `${SERVICE_NAME} no ar`);
+  logger.info({ port: PORT, otlp_endpoint: OTLP_ENDPOINT, trace_sample_rate: TRACE_SAMPLE_RATE }, `${SERVICE_NAME} no ar`);
 });
 
 // Envia os spans que ainda estão em memória antes de desligar

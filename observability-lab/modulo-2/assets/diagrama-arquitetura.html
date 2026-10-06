@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura da Demo - Módulo 2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .cartao {
+    width: 100%;
+    max-width: 1240px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
+  header p { font-size: 13px; color: #546e7a; margin-top: 2px; }
+  .chaves { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chave {
+    --cor: #455a64;
+    font: inherit; font-size: 14px; font-weight: 700;
+    padding: 8px 14px 8px 10px;
+    border-radius: 999px;
+    border: 2px solid var(--cor);
+    background: var(--cor);
+    color: #fff;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background .2s, color .2s;
+  }
+  .chave::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .chave[aria-pressed="false"] { background: #fff; color: var(--cor); }
+  .chave[aria-pressed="false"]::before { background: #cfd8dc; }
+  .chave:focus-visible { outline: 3px solid #90caf9; outline-offset: 2px; }
+
+  .rolagem { overflow-x: auto; }
+  svg { display: block; width: 100%; min-width: 820px; height: auto; font-family: inherit; }
+  svg text { fill: #263238; }
+  .t-titulo { font-size: 15px; font-weight: 800; }
+  .t-sub { font-size: 12px; fill: #546e7a; }
+  .t-rotulo { font-size: 12px; font-weight: 600; }
+  .t-grupo { font-size: 13px; font-weight: 700; letter-spacing: .5px; }
+  .caixa { fill: #fff; stroke: #455a64; stroke-width: 2; }
+  .seta { fill: none; stroke-width: 2.5; }
+  .pilar { transition: opacity .3s; }
+  .pilar.desligado { opacity: .12; }
+
+  .resumo { margin-top: 12px; padding: 12px 16px; border-radius: 10px; background: #f5f7f8; font-size: 15px; line-height: 1.45; min-height: 3.4em; }
+  @media (prefers-reduced-motion: reduce) { .pilar, .chave { transition: none; } }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <div>
+      <h1>Arquitetura da Demo — Módulo 2</h1>
+      <p>Ligue e desligue cada pilar para ver o que ele acrescenta à <b>checkout-api</b></p>
+    </div>
+    <div class="chaves">
+      <button type="button" class="chave" data-pilar="logs" aria-pressed="true" style="--cor:#455a64">Logs</button>
+      <button type="button" class="chave" data-pilar="metricas" aria-pressed="true" style="--cor:#1565c0">Métricas</button>
+      <button type="button" class="chave" data-pilar="traces" aria-pressed="true" style="--cor:#2e7d32">Traces</button>
+    </div>
+  </header>
+
+  <div class="rolagem">
+  <svg viewBox="0 0 1200 660" role="img" aria-label="Diagrama: CloudFormation cria um Security Group e uma EC2 na AWS. Na EC2, o Docker Compose roda o gerador de tráfego, a checkout-api, o Jaeger, o Prometheus e o Grafana. A API escreve logs no stdout, expõe métricas para o Prometheus e envia spans para o Jaeger.">
+    <defs>
+      <marker id="m-cinza" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#455a64"/></marker>
+      <marker id="m-azul" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1565c0"/></marker>
+      <marker id="m-verde" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2e7d32"/></marker>
+      <marker id="m-claro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#90a4ae"/></marker>
+    </defs>
+
+    <!-- ===== Fora da AWS ===== -->
+    <rect class="caixa" x="20" y="60" width="160" height="64" rx="10" style="stroke:#90a4ae"/>
+    <text class="t-titulo" x="100" y="87" text-anchor="middle">CloudFormation</text>
+    <text class="t-sub" x="100" y="106" text-anchor="middle">cria os recursos</text>
+
+    <rect class="caixa" x="20" y="262" width="160" height="76" rx="10"/>
+    <text class="t-titulo" x="100" y="292" text-anchor="middle">Instrutor e alunos</text>
+    <text class="t-sub" x="100" y="311" text-anchor="middle">navegador</text>
+
+    <rect class="caixa" x="20" y="540" width="160" height="64" rx="10" style="stroke:#90a4ae"/>
+    <text class="t-titulo" x="100" y="567" text-anchor="middle">GitHub</text>
+    <text class="t-sub" x="100" y="586" text-anchor="middle">código da demo</text>
+
+    <!-- ===== AWS ===== -->
+    <rect x="225" y="24" width="960" height="620" rx="14" fill="#fafbfc" stroke="#b0bec5" stroke-width="2"/>
+    <text class="t-grupo" x="243" y="48" style="fill:#546e7a">AWS — stack obsf-modulo-2</text>
+
+    <!-- Security Group -->
+    <rect x="250" y="130" width="130" height="340" rx="10" fill="#fff" stroke="#c62828" stroke-width="2" stroke-dasharray="7 5"/>
+    <text class="t-grupo" x="315" y="156" text-anchor="middle" style="fill:#c62828">Security Group</text>
+    <text class="t-sub" x="315" y="174" text-anchor="middle">AllowedCidr</text>
+    <g font-size="12" font-weight="700" text-anchor="middle">
+      <rect x="268" y="196" width="94" height="40" rx="8" fill="#eceff1"/>
+      <text x="315" y="213">:3000</text><text class="t-sub" x="315" y="228" style="font-weight:400">API</text>
+      <g class="pilar" data-pilar="metricas">
+        <rect x="268" y="248" width="94" height="40" rx="8" fill="#e3f2fd"/>
+        <text x="315" y="265" style="fill:#1565c0">:9090</text><text class="t-sub" x="315" y="280" style="font-weight:400">Prometheus</text>
+        <rect x="268" y="300" width="94" height="40" rx="8" fill="#e3f2fd"/>
+        <text x="315" y="317" style="fill:#1565c0">:3001</text><text class="t-sub" x="315" y="332" style="font-weight:400">Grafana</text>
+      </g>
+      <g class="pilar" data-pilar="traces">
+        <rect x="268" y="352" width="94" height="40" rx="8" fill="#e8f5e9"/>
+        <text x="315" y="369" style="fill:#2e7d32">:16686</text><text class="t-sub" x="315" y="384" style="font-weight:400">Jaeger UI</text>
+      </g>
+    </g>
+    <text class="t-sub" x="315" y="430" text-anchor="middle">sem SSH (22)</text>
+
+    <!-- EC2 -->
+    <rect x="420" y="66" width="745" height="560" rx="12" fill="#fff" stroke="#ef6c00" stroke-width="2"/>
+    <text class="t-grupo" x="438" y="90" style="fill:#e65100">EC2 t3.small — Amazon Linux 2023</text>
+    <rect x="880" y="76" width="270" height="26" rx="13" fill="#fff3e0"/>
+    <text class="t-sub" x="1015" y="94" text-anchor="middle" style="fill:#e65100">IAM Role + Session Manager (terminal)</text>
+
+    <!-- Docker Compose -->
+    <rect x="440" y="116" width="705" height="492" rx="10" fill="#f5f7f8" stroke="#90a4ae" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text class="t-grupo" x="458" y="140" style="fill:#546e7a">Docker Compose</text>
+
+    <!-- load -->
+    <rect class="caixa" x="460" y="300" width="124" height="76" rx="10"/>
+    <text class="t-titulo" x="522" y="330" text-anchor="middle">load.js</text>
+    <text class="t-sub" x="522" y="349" text-anchor="middle">gera tráfego</text>
+
+    <!-- app -->
+    <rect x="640" y="270" width="176" height="136" rx="12" fill="#263238"/>
+    <text class="t-titulo" x="728" y="300" text-anchor="middle" style="fill:#fff">checkout-api</text>
+    <text class="t-sub" x="728" y="318" text-anchor="middle" style="fill:#b0bec5">Express · porta 3000</text>
+    <g font-size="11" font-weight="700" text-anchor="middle">
+      <g class="pilar" data-pilar="logs"><rect x="654" y="332" width="148" height="18" rx="9" fill="#cfd8dc"/><text x="728" y="345">Pino</text></g>
+      <g class="pilar" data-pilar="metricas"><rect x="654" y="354" width="148" height="18" rx="9" fill="#90caf9"/><text x="728" y="367">prom-client</text></g>
+      <g class="pilar" data-pilar="traces"><rect x="654" y="376" width="148" height="18" rx="9" fill="#a5d6a7"/><text x="728" y="389">OpenTelemetry SDK</text></g>
+    </g>
+
+    <!-- LOGS -->
+    <g class="pilar" data-pilar="logs">
+      <rect class="caixa" x="960" y="158" width="170" height="76" rx="10" style="fill:#eceff1"/>
+      <text class="t-titulo" x="1045" y="186" text-anchor="middle">stdout (JSON)</text>
+      <text class="t-sub" x="1045" y="205" text-anchor="middle">docker logs</text>
+      <text class="t-sub" x="1045" y="222" text-anchor="middle" style="font-weight:700">O QUÊ aconteceu</text>
+      <path class="seta" d="M816 290 L956 204" stroke="#455a64" marker-end="url(#m-cinza)"/>
+      <text class="t-rotulo" x="868" y="232" text-anchor="middle" style="fill:#455a64">logs JSON</text>
+    </g>
+
+    <!-- MÉTRICAS -->
+    <g class="pilar" data-pilar="metricas">
+      <rect class="caixa" x="960" y="290" width="170" height="76" rx="10" style="fill:#e3f2fd;stroke:#1565c0"/>
+      <text class="t-titulo" x="1045" y="318" text-anchor="middle" style="fill:#1565c0">Prometheus</text>
+      <text class="t-sub" x="1045" y="337" text-anchor="middle">porta 9090</text>
+      <text class="t-sub" x="1045" y="354" text-anchor="middle" style="font-weight:700">QUANTOS, QUANTO tempo</text>
+      <path class="seta" d="M960 338 L820 338" stroke="#1565c0" marker-end="url(#m-azul)"/>
+      <text class="t-rotulo" x="889" y="330" text-anchor="middle" style="fill:#1565c0">scrape /metrics</text>
+      <text class="t-sub" x="889" y="356" text-anchor="middle">a cada 5s</text>
+
+      <rect class="caixa" x="960" y="400" width="170" height="60" rx="10" style="fill:#e3f2fd;stroke:#1565c0"/>
+      <text class="t-titulo" x="1045" y="427" text-anchor="middle" style="fill:#1565c0">Grafana</text>
+      <text class="t-sub" x="1045" y="446" text-anchor="middle">porta 3001</text>
+      <path class="seta" d="M1045 400 L1045 370" stroke="#1565c0" marker-end="url(#m-azul)"/>
+      <text class="t-sub" x="1055" y="390">consulta</text>
+    </g>
+
+    <!-- TRACES -->
+    <g class="pilar" data-pilar="traces">
+      <rect class="caixa" x="960" y="504" width="170" height="76" rx="10" style="fill:#e8f5e9;stroke:#2e7d32"/>
+      <text class="t-titulo" x="1045" y="532" text-anchor="middle" style="fill:#2e7d32">Jaeger</text>
+      <text class="t-sub" x="1045" y="551" text-anchor="middle">UI na porta 16686</text>
+      <text class="t-sub" x="1045" y="568" text-anchor="middle" style="font-weight:700">a HISTÓRIA da requisição</text>
+      <path class="seta" d="M790 406 L956 532" stroke="#2e7d32" marker-end="url(#m-verde)"/>
+      <text class="t-rotulo" x="838" y="490" text-anchor="middle" style="fill:#2e7d32">spans</text>
+      <text class="t-sub" x="838" y="506" text-anchor="middle">OTLP/HTTP :4318</text>
+    </g>
+
+    <!-- ===== Fluxos fixos ===== -->
+    <path class="seta" d="M584 338 L636 338" stroke="#455a64" marker-end="url(#m-cinza)"/>
+    <text class="t-sub" x="522" y="396" text-anchor="middle">POST /orders</text>
+    <text class="t-sub" x="522" y="412" text-anchor="middle">GET /orders/:id</text>
+
+    <path class="seta" d="M180 300 L246 300" stroke="#455a64" marker-end="url(#m-cinza)"/>
+    <text class="t-sub" x="212" y="290" text-anchor="middle">HTTP</text>
+    <path class="seta" d="M380 300 L416 300" stroke="#455a64" marker-end="url(#m-cinza)"/>
+
+    <path class="seta" d="M180 92 L221 92" stroke="#90a4ae" stroke-dasharray="5 4" marker-end="url(#m-claro)"/>
+    <path class="seta" d="M180 572 L416 572" stroke="#90a4ae" stroke-dasharray="5 4" marker-end="url(#m-claro)"/>
+    <text class="t-sub" x="300" y="562" text-anchor="middle">git clone no boot</text>
+  </svg>
+  </div>
+
+  <p class="resumo" id="resumo" aria-live="polite"></p>
+</main>
+
+<script>
+  var estado = { logs: true, metricas: true, traces: true };
+  var frases = {
+    logs: '<b>Logs</b> contam o que aconteceu em cada requisição',
+    metricas: '<b>Métricas</b> mostram quantas requisições, quantos erros e quanto tempo',
+    traces: '<b>Traces</b> mostram o caminho completo de uma requisição'
+  };
+
+  function desenhar() {
+    document.querySelectorAll('.pilar').forEach(function (g) {
+      g.classList.toggle('desligado', !estado[g.dataset.pilar]);
+    });
+    document.querySelectorAll('.chave').forEach(function (b) {
+      b.setAttribute('aria-pressed', estado[b.dataset.pilar]);
+    });
+    var ligados = Object.keys(estado).filter(function (p) { return estado[p]; });
+    var texto;
+    if (ligados.length === 0) {
+      texto = 'A aplicação está no ar e recebendo pedidos, mas estamos <b>no escuro</b>: se algo falhar, ninguém fica sabendo.';
+    } else {
+      texto = ligados.map(function (p) { return frases[p]; }).join('. ') + '.';
+      if (ligados.length === 3) texto += ' Juntos, levam do sintoma à causa.';
+    }
+    document.getElementById('resumo').innerHTML = texto;
+  }
+
+  document.querySelectorAll('.chave').forEach(function (b) {
+    b.addEventListener('click', function () {
+      estado[b.dataset.pilar] = !estado[b.dataset.pilar];
+      desenhar();
+    });
+  });
+  desenhar();
+</script>
+</body>
+</html>

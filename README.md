@@ -30,7 +30,7 @@ Seu navegador ──(AllowedCidr)──▶ Security Group ──▶ EC2 t3.small
 - **Security Group**: libera as portas 3000, 3001, 9090 e 16686 para a faixa de IP do parâmetro `AllowedCidr`. Não há SSH.
 - **IAM Role**: permite abrir o terminal da instância pelo Session Manager (sem chave `.pem`).
 
-Custo aproximado: US$ 0,03 por hora enquanto a stack existir. **Apague a stack ao final da aula** (passo 7).
+Custo aproximado: US$ 0,03 por hora enquanto a stack existir. **Apague a stack ao final da aula** (passo 8).
 
 ## Pré-requisitos
 
@@ -64,7 +64,7 @@ aws cloudformation deploy --stack-name obsf-modulo-2 --template-file observabili
 ```
 
 O comando usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`) e leva cerca de 2 minutos.
-Com `AllowedCidr=0.0.0.0/0` qualquer pessoa com o endereço acessa a demo, o que facilita o uso com os alunos; apague a stack ao fim da aula (passo 7).
+Com `AllowedCidr=0.0.0.0/0` qualquer pessoa com o endereço acessa a demo, o que facilita o uso com os alunos; apague a stack ao fim da aula (passo 8).
 Para restringir ao seu IP, use `AllowedCidr=$(curl -s https://checkip.amazonaws.com)/32`. Rodar o comando de novo com outro valor atualiza a regra sem recriar a instância.
 
 Parâmetros opcionais (acrescente em `--parameter-overrides`):
@@ -176,7 +176,71 @@ Copie o `trace_id` de uma linha de log de erro e cole na busca do Jaeger (canto 
 sudo docker logs modulo-2-app-1 | grep '"level":"error"' | tail -1
 ```
 
-## 6. Observações para aula
+## 6. Demo de sampling: com e sem amostragem
+
+A app já tem o sampler configurado em `app.js` (bloco `sampler:` do `NodeSDK`). A taxa vem da variável `TRACE_SAMPLE_RATE` no `.env`, que começa em `1.0` (100% dos traces, ou seja, sem sampling).
+
+> Se a instância foi criada antes de o sampler entrar no repositório, ela ainda não tem o `atualizar.sh` nem a métrica `traces_total`. Atualize uma vez, antes da aula, no terminal da instância:
+> `cd /opt/obsf && sudo git pull && cd observability-lab/modulo-2 && sudo ./atualizar.sh`
+
+**Antes: sem sampling.** Com o gerador de tráfego rodando, abra o Prometheus e rode as duas queries (aba **Graph**):
+
+```promql
+# Requisições por segundo
+sum(rate(http_requests_total[1m]))
+```
+
+```promql
+# Traces por segundo enviados ao Jaeger
+sum(rate(traces_total{sampled="true"}[1m]))
+```
+
+As duas linhas ficam iguais: toda requisição gera um trace.
+
+**Aplicar o sampling.** No seu computador, edite `observability-lab/modulo-2/.env` e troque para `TRACE_SAMPLE_RATE=0.1`. Depois:
+
+```bash
+git commit -am "Aplica sampling de 10% nos traces"
+```
+
+```bash
+git push origin main
+```
+
+No terminal da instância:
+
+```bash
+cd /opt/obsf/observability-lab/modulo-2
+```
+
+```bash
+sudo ./atualizar.sh
+```
+
+O script faz `git pull`, recria a app e mostra a taxa que entrou em vigor (`"trace_sample_rate":0.1`). O Jaeger e o Prometheus não são reiniciados, então o histórico é preservado.
+
+**Depois: com sampling.** Em cerca de um minuto:
+
+- No Prometheus, a linha de traces cai para cerca de 10% da linha de requisições. A fração exata:
+
+```promql
+sum(rate(traces_total{sampled="true"}[1m])) / sum(rate(traces_total[1m]))
+```
+
+- Nos logs, todo registro continua tendo `trace_id`, mas agora com `"sampled":false` na maioria:
+
+```bash
+sudo docker logs --since 1m modulo-2-app-1 | grep -c '"sampled":false'
+```
+
+- No Jaeger, busque os últimos 5 minutos: aparecem bem menos traces. Copie o `trace_id` de um log com `"sampled":false` e cole na busca: o Jaeger não encontra.
+- Os erros também são amostrados: a maioria dos 500 fica sem trace. É a limitação do head sampling.
+
+Para voltar, troque para `TRACE_SAMPLE_RATE=1.0`, faça commit, push e rode `sudo ./atualizar.sh` de novo.
+
+Material de apoio para projetar (abra no navegador): `observability-lab/modulo-2/assets/sampling.html` (com e sem sampling), `codigo-para-sinal.html` (o código que gera cada sinal) e `diagrama-arquitetura.html`.
+
+## 7. Observações para aula
 
 - **Logs** mostram o QUÊ aconteceu (eventos, um a um, com todo o contexto)
 - **Métricas** mostram agregados (quantos, quanto tempo)
@@ -184,7 +248,7 @@ sudo docker logs modulo-2-app-1 | grep '"level":"error"' | tail -1
 - Nos logs o `endpoint` é o caminho real (`/orders/ORD-123`); nas métricas é a rota (`/orders/:id`).
   É proposital: um label por pedido criaria milhares de séries no Prometheus (alta cardinalidade).
 
-## 7. Apagar tudo
+## 8. Apagar tudo
 
 ```bash
 aws cloudformation delete-stack --stack-name obsf-modulo-2
@@ -198,7 +262,7 @@ Isso remove a instância, o Security Group e a Role. Nada fica cobrando depois.
 |---------|-------------|
 | As URLs não abrem | Aguarde os 3 a 4 minutos iniciais. Se restringiu o `AllowedCidr` ao seu IP e ele mudou (outra rede, VPN), rode o passo 2 de novo com o IP atual. |
 | A demo não subiu | No terminal da instância: `sudo tail -50 /var/log/cloud-init-output.log`. O erro mais comum é o `git clone` falhar porque o repositório está privado ou o código não foi enviado. |
-| Atualizei o código | No terminal da instância: `cd /opt/obsf && sudo git pull && cd observability-lab/modulo-2 && sudo docker compose up -d --force-recreate app` |
+| Atualizei o código | No terminal da instância: `cd /opt/obsf/observability-lab/modulo-2 && sudo ./atualizar.sh` |
 | `No default VPC` ao criar a stack | Crie uma com `aws ec2 create-default-vpc` ou use outra região. |
 
 ## Segurança
@@ -217,6 +281,8 @@ A demo usa HTTP sem criptografia, Grafana com `admin/admin` e Jaeger/Prometheus 
 | `prometheus.yml` | Configuração do scrape (a cada 5s) |
 | `grafana/datasources.yml` | Datasource Prometheus pré-configurado |
 | `start.sh` | Sobe os containers e avisa quando estiver pronto |
+| `atualizar.sh` | Na instância: baixa a última versão do código e recria a app |
+| `assets/` | Diagrama e páginas de apoio para projetar na aula |
 
 ## Rodar local (opcional)
 
