@@ -1,64 +1,63 @@
 # Observability Foundations — Laboratório
 
-Material de apoio e demos do curso **Observability Foundations**.
+Material de apoio e demos do curso **Observability Foundations**. Todas as demos usam a mesma aplicação, a `checkout-api`, que evolui a cada módulo.
 
-| Módulo | Conteúdo | Onde está |
-|--------|----------|-----------|
-| 1 — Conceitos | Infográficos: ruído vs sinal, MELT, consumidores de observabilidade | `observability-lab/modulo-1/assets/` (abra os `.html` no navegador) |
-| 2 — Pilares | Demo `checkout-api` com logs, métricas e traces, rodando na AWS | `observability-lab/modulo-2/` |
-| 3 — OpenTelemetry | A mesma API com auto-instrumentação, hierarquia de spans, baggage e eventos | `observability-lab/modulo-3/` ([instruções](#módulo-3-opentelemetry)) |
-| 4 — Service mapping | Dois serviços (`checkout-api` → `payment-service`) em um único trace, com mapa de serviços | `observability-lab/modulo-4/` ([instruções](#módulo-4-service-mapping)) |
-| 5 — DataOps e CIA Triad | Infográfico da tríade CIA e biblioteca de mascaramento de dados sensíveis | `observability-lab/modulo-5/` ([instruções](#módulo-5-dataops-e-cia-triad)) |
+| Módulo | O que tem | Como usar |
+|--------|-----------|-----------|
+| 1 — Conceitos | Infográficos: ruído vs sinal, MELT, consumidores | Abrir os `.html` no navegador |
+| 2 — Pilares | `checkout-api` com logs, métricas e traces; demo de sampling | Demo na AWS |
+| 3 — OpenTelemetry | Auto-instrumentação, hierarquia de spans, baggage, eventos | Demo na AWS |
+| 4 — Service mapping | Dois serviços em um único trace; mapa de serviços | Demo na AWS |
+| 5 — DataOps e CIA Triad | Infográfico da tríade CIA e mascaramento de dados | Abrir o `.html` e rodar um script |
 
 ---
 
-# Módulo 2: Pilares da Observabilidade na AWS
+# Passo a passo: visão única
 
-Uma API de pedidos (`checkout-api`) instrumentada com os 3 pilares: **logs** (Pino), **métricas** (Prometheus) e **traces** (OpenTelemetry + Jaeger).
+Um único ambiente na AWS serve os módulos 2, 3 e 4. Você o cria uma vez, troca de módulo com um comando e apaga tudo no final.
 
-## Arquitetura
+| # | Passo | Quando | Onde | Comando ou ação |
+|---|-------|--------|------|-----------------|
+| 1 | [Publicar o código](#1-publicar-o-código-no-github) | Uma vez, e a cada mudança | Seu computador | `git add -A`, `git commit`, `git push origin main` |
+| 2 | [Criar o ambiente](#2-criar-o-ambiente-na-aws) | Uma vez | Seu computador | `aws cloudformation deploy ...` |
+| 3 | [Pegar os endereços](#3-pegar-os-endereços) | Uma vez | Seu computador | `aws cloudformation describe-stacks ...` |
+| 4 | [Módulo 1](#4-módulo-1-conceitos) | Na aula | Navegador | Abrir os infográficos |
+| 5 | [Módulo 2](#5-módulo-2-pilares-da-observabilidade) | Na aula | Terminal da instância | `trocar-modulo.sh 2`, gerar tráfego, mostrar |
+| 6 | [Módulo 3](#6-módulo-3-opentelemetry) | Na aula | Terminal da instância | `trocar-modulo.sh 3`, gerar tráfego, mostrar |
+| 7 | [Módulo 4](#7-módulo-4-service-mapping) | Na aula | Terminal da instância | `trocar-modulo.sh 4`, gerar tráfego, mostrar |
+| 8 | [Módulo 5](#8-módulo-5-dataops-e-cia-triad) | Na aula | Navegador e seu computador | Abrir o infográfico, `node exemplo.js` |
+| 9 | [Apagar tudo](#9-apagar-tudo) | Ao final | Seu computador | `aws cloudformation delete-stack ...` |
 
-Um template do CloudFormation cria tudo:
+Os passos 5, 6 e 7 seguem sempre a mesma [rotina de demo](#rotina-de-cada-demo-módulos-2-3-e-4): colocar o módulo no ar, gerar tráfego e abrir as ferramentas.
 
-```
-Seu navegador ──(AllowedCidr)──▶ Security Group ──▶ EC2 t3.small (Amazon Linux 2023)
-                                                          └─ Docker Compose
-                                                              ├─ app         :3000   checkout-api
-                                                              ├─ jaeger      :16686  traces
-                                                              ├─ prometheus  :9090   métricas
-                                                              └─ grafana     :3001   dashboards
-```
+---
 
-- **EC2**: ao iniciar, instala o Docker, clona este repositório e executa `start.sh`.
-- **Security Group**: libera as portas 3000, 3001, 9090 e 16686 para a faixa de IP do parâmetro `AllowedCidr`. Não há SSH.
-- **IAM Role**: permite abrir o terminal da instância pelo Session Manager (sem chave `.pem`).
-
-Custo aproximado: US$ 0,03 por hora enquanto a stack existir. **Apague a stack ao final da aula** (passo 8).
+# Preparação (uma vez)
 
 ## Pré-requisitos
 
 - Conta AWS com permissão para criar EC2, Security Group e IAM Role
 - VPC padrão (default VPC) na região escolhida
 - AWS CLI v2 autenticado (`aws sts get-caller-identity` deve responder)
-- Este repositório publicado no GitHub como **público** — a instância faz `git clone` dele
+- Este repositório publicado no GitHub como **público**: a instância faz `git clone` dele
 
 ## 1. Publicar o código no GitHub
 
-A instância baixa o código do GitHub, então tudo precisa estar no `main`:
+A instância baixa o código do GitHub, então tudo precisa estar no `main`. Repita sempre que alterar algo:
 
 ```bash
 git add -A
 ```
 
 ```bash
-git commit -m "Demo do módulo 2"
+git commit -m "Atualiza o laboratório"
 ```
 
 ```bash
 git push origin main
 ```
 
-## 2. Criar os recursos na AWS
+## 2. Criar o ambiente na AWS
 
 Na raiz do repositório:
 
@@ -66,9 +65,24 @@ Na raiz do repositório:
 aws cloudformation deploy --stack-name obsf-modulo-2 --template-file observability-lab/modulo-2/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
 ```
 
-O comando usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`) e leva cerca de 2 minutos.
-Com `AllowedCidr=0.0.0.0/0` qualquer pessoa com o endereço acessa a demo, o que facilita o uso com os alunos; apague a stack ao fim da aula (passo 8).
-Para restringir ao seu IP, use `AllowedCidr=$(curl -s https://checkip.amazonaws.com)/32`. Rodar o comando de novo com outro valor atualiza a regra sem recriar a instância.
+Leva cerca de 2 minutos e usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`). A stack se chama `obsf-modulo-2` por ter nascido nesse módulo, mas atende os módulos 2, 3 e 4.
+
+O que é criado:
+
+```
+Navegador ──(AllowedCidr)──▶ Security Group ──▶ EC2 t3.small (Amazon Linux 2023)
+                                                  └─ Docker Compose
+                                                      ├─ checkout-api   :3000
+                                                      ├─ jaeger         :16686  traces
+                                                      ├─ prometheus     :9090   métricas
+                                                      └─ grafana        :3001   dashboards
+```
+
+- **EC2:** ao iniciar, instala o Docker, clona este repositório em `/opt/obsf` e sobe a demo do Módulo 2.
+- **Security Group:** libera as portas 3000, 3001, 9090 e 16686 para a faixa do parâmetro `AllowedCidr`. Não há SSH.
+- **IAM Role:** permite abrir o terminal da instância pelo Session Manager, sem chave `.pem`.
+
+Com `AllowedCidr=0.0.0.0/0` qualquer pessoa com o endereço acessa a demo, o que facilita o uso com os alunos. Para restringir ao seu IP, use `AllowedCidr=$(curl -s https://checkip.amazonaws.com)/32`. Rodar o comando de novo com outro valor atualiza a regra sem recriar a instância.
 
 Parâmetros opcionais (acrescente em `--parameter-overrides`):
 
@@ -78,7 +92,7 @@ Parâmetros opcionais (acrescente em `--parameter-overrides`):
 | `RepoBranch` | `main` | Outra branch |
 | `InstanceType` | `t3.small` | `t3.medium` ou `t3.large` |
 
-Prefere o console? **CloudFormation → Create stack → Upload a template file**, envie `observability-lab/modulo-2/aws/cloudformation.yaml`, preencha `AllowedCidr` com `0.0.0.0/0` (ou `SEU_IP/32` para restringir) e marque a caixa de confirmação de recursos IAM.
+Custo aproximado: US$ 0,03 por hora enquanto a stack existir.
 
 ## 3. Pegar os endereços
 
@@ -94,22 +108,33 @@ aws cloudformation describe-stacks --stack-name obsf-modulo-2 --query "Stacks[0]
 | `GrafanaUrl` | Grafana (admin/admin) |
 | `TerminalUrl` | Terminal da instância no navegador |
 
-Depois que a stack fica pronta, a instância ainda leva **de 3 a 4 minutos** para instalar o Docker, baixar as imagens e subir a demo. Está pronta quando `AppUrl` + `/metrics` responder no navegador.
+Os endereços são os mesmos para os módulos 2, 3 e 4. Depois que a stack fica pronta, a instância ainda leva **de 3 a 4 minutos** para instalar o Docker e subir a demo. Está pronta quando `AppUrl` + `/metrics` responder no navegador.
 
-## 4. Gerar tráfego
+---
 
-Abra o `TerminalUrl` no navegador (ou **EC2 → Instances → obsf-modulo-2 → Connect → Session Manager**) e rode:
+# Rotina de cada demo (módulos 2, 3 e 4)
+
+Tudo aqui é feito no terminal da instância: abra o `TerminalUrl` no navegador (ou **EC2 → Instances → obsf-modulo-2 → Connect → Session Manager**).
+
+## A. Colocar o módulo no ar
+
+Troque o número no final pelo módulo desejado (`2`, `3` ou `4`):
 
 ```bash
-cd /opt/obsf/observability-lab/modulo-2
+cd /opt/obsf && sudo git pull && sudo observability-lab/trocar-modulo.sh 3
 ```
+
+O comando baixa a última versão do código, derruba a demo que estiver rodando e sobe a do módulo escolhido. Os três módulos usam as mesmas portas, então só um roda por vez. O Módulo 4 constrói imagens na primeira vez e leva de 1 a 2 minutos.
+
+## B. Gerar tráfego
+
+Troque `modulo-3` pelo módulo que está no ar:
 
 ```bash
-sudo docker compose run --rm load
+cd /opt/obsf/observability-lab/modulo-3 && sudo docker compose run --rm load
 ```
 
-A cada 5 segundos são enviados 50 `POST /orders` e, para cada pedido criado, um `GET /orders/:id`.
-Cerca de 5% dos POST retornam 400 (payload inválido) e 5% dos GET retornam 500 (falha intermitente). Pare com `Ctrl+C`.
+A cada 5 segundos são enviados 50 `POST /orders` e, para cada pedido criado, um `GET /orders/:id`. Cerca de 5% dos POST vão com payload inválido e retornam 400. Pare com `Ctrl+C`.
 
 Para criar um pedido na mão, do seu computador (troque `APP_URL` pelo output `AppUrl`):
 
@@ -117,11 +142,53 @@ Para criar um pedido na mão, do seu computador (troque `APP_URL` pelo output `A
 curl -X POST APP_URL/orders -H "Content-Type: application/json" -d '{"customer_id":"CUST-1","amount":250}'
 ```
 
-## 5. O que você vai ver
+## C. Ver os logs
 
-### LOGS (terminal da instância)
+Em uma segunda aba do terminal, troque o nome do container conforme o módulo:
 
-Abra uma segunda aba do `TerminalUrl`:
+| Módulo | Container |
+|--------|-----------|
+| 2 | `modulo-2-app-1` |
+| 3 | `modulo-3-app-1` |
+| 4 | `modulo-4-api-1` e `modulo-4-payment-service-1` |
+
+```bash
+sudo docker logs -f modulo-3-app-1
+```
+
+## D. Aplicar uma mudança de código ou de `.env`
+
+Depois do `git push` (passo 1), dentro da pasta do módulo que está no ar:
+
+```bash
+sudo ./atualizar.sh
+```
+
+O script faz `git pull` e recria só a aplicação. Jaeger e Prometheus não reiniciam, então o histórico é preservado.
+
+---
+
+# O que mostrar em cada módulo
+
+## 4. Módulo 1: Conceitos
+
+Abra no navegador, direto do seu computador, os arquivos de `observability-lab/modulo-1/assets/`:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `infografico-ruido-sinal.html` | Ruído vs sinal; o botão destaca os poucos alertas que importam |
+| `infografico-melt.html` | Os quatro tipos de telemetria e como se complementam em um incidente |
+| `modal-consumidores.html` | O que cada perfil (DevOps, SRE, Developer, Security) precisa da observabilidade |
+
+## 5. Módulo 2: Pilares da Observabilidade
+
+Uma API de pedidos instrumentada com os 3 pilares: **logs** (Pino), **métricas** (Prometheus) e **traces** (OpenTelemetry + Jaeger).
+
+Coloque no ar com `trocar-modulo.sh 2` e gere tráfego ([rotina](#rotina-de-cada-demo-módulos-2-3-e-4)). Neste módulo, 5% dos `GET /orders/:id` retornam 500 (falha intermitente).
+
+Material para projetar, em `observability-lab/modulo-2/assets/`: `diagrama-arquitetura.html` (liga e desliga cada pilar), `codigo-para-sinal.html` (o código que gera cada sinal) e `sampling.html` (com e sem sampling).
+
+### Logs (terminal da instância)
 
 ```bash
 sudo docker logs -f modulo-2-app-1
@@ -130,22 +197,21 @@ sudo docker logs -f modulo-2-app-1
 Mensagens JSON estruturadas aparecem em tempo real, duas por requisição (entrada e saída):
 
 ```json
-{"level":"info","timestamp":"2026-10-05T11:54:41.778Z","service":"checkout-api","trace_id":"aae6acab...","correlation_id":"d559e416-...","method":"GET","endpoint":"/orders/ORD-6d0bb578","status":200,"duration_ms":55,"customer_id":"CUST-295","order_id":"ORD-6d0bb578","message":"requisição finalizada"}
+{"level":"info","timestamp":"2026-10-05T11:54:41.778Z","service":"checkout-api","trace_id":"aae6acab...","sampled":true,"correlation_id":"d559e416-...","method":"GET","endpoint":"/orders/ORD-6d0bb578","status":200,"duration_ms":55,"customer_id":"CUST-295","order_id":"ORD-6d0bb578","message":"requisição finalizada"}
 ```
 
-Só os erros (com stack trace):
+Só os erros, com stack trace:
 
 ```bash
 sudo docker logs modulo-2-app-1 | grep '"level":"error"'
 ```
 
-### MÉTRICAS (Prometheus)
+### Métricas (Prometheus)
 
-1. Abra o `PrometheusUrl`
+1. Abra o `PrometheusUrl`.
 2. Query: `http_requests_total`
 3. Query: `http_request_duration_seconds_bucket`
 4. Query: `orders_pending` (aba **Graph**: sobe a cada lote e desce conforme os pedidos são confirmados)
-5. Os valores atualizam a cada 5s
 
 Queries prontas para a aula:
 
@@ -162,14 +228,12 @@ histogram_quantile(0.95, sum by (le, endpoint) (rate(http_request_duration_secon
 
 As mesmas queries funcionam no Grafana (`GrafanaUrl` → **Explore**); o datasource Prometheus já vem configurado.
 
-### TRACES (Jaeger)
+### Traces (Jaeger)
 
-1. Abra o `JaegerUrl`
-2. Service: `checkout-api`
-3. Operation: `POST /orders`
-4. **Find Traces** e clique em um trace para ver a timeline dos spans
-   (`POST /orders` → `processar-pedido`, ou `GET /orders/:id` → `db.buscar-pedido`)
-5. Para ver só as falhas: campo **Tags** com `error=true`
+1. Abra o `JaegerUrl`.
+2. Service: `checkout-api`, Operation: `POST /orders`, **Find Traces**.
+3. Clique em um trace para ver a timeline (`POST /orders` → `processar-pedido`, ou `GET /orders/:id` → `db.buscar-pedido`).
+4. Para ver só as falhas: campo **Tags** com `error=true`.
 
 ### Ligando os pilares
 
@@ -179,14 +243,11 @@ Copie o `trace_id` de uma linha de log de erro e cole na busca do Jaeger (canto 
 sudo docker logs modulo-2-app-1 | grep '"level":"error"' | tail -1
 ```
 
-## 6. Demo de sampling: com e sem amostragem
+### Sampling: com e sem amostragem
 
-A app já tem o sampler configurado em `app.js` (bloco `sampler:` do `NodeSDK`). A taxa vem da variável `TRACE_SAMPLE_RATE` no `.env`, que começa em `1.0` (100% dos traces, ou seja, sem sampling).
+O sampler está no bloco `sampler:` do `NodeSDK`, em `app.js`. A taxa vem de `TRACE_SAMPLE_RATE` em `observability-lab/modulo-2/.env`: `1.0` envia 100% dos traces (sem sampling) e `0.1` envia 10%. Confira o valor atual do arquivo antes da aula.
 
-> Se a instância foi criada antes de o sampler entrar no repositório, ela ainda não tem o `atualizar.sh` nem a métrica `traces_total`. Atualize uma vez, antes da aula, no terminal da instância:
-> `cd /opt/obsf && sudo git pull && cd observability-lab/modulo-2 && sudo ./atualizar.sh`
-
-**Antes: sem sampling.** Com o gerador de tráfego rodando, abra o Prometheus e rode as duas queries (aba **Graph**):
+**Antes (taxa 1.0).** Com tráfego rodando, no Prometheus (aba **Graph**):
 
 ```promql
 # Requisições por segundo
@@ -200,29 +261,15 @@ sum(rate(traces_total{sampled="true"}[1m]))
 
 As duas linhas ficam iguais: toda requisição gera um trace.
 
-**Aplicar o sampling.** No seu computador, edite `observability-lab/modulo-2/.env` e troque para `TRACE_SAMPLE_RATE=0.1`. Depois:
+**Aplicar.** No seu computador, edite o `.env` para `TRACE_SAMPLE_RATE=0.1`, faça commit e push (passo 1). No terminal da instância:
 
 ```bash
-git commit -am "Aplica sampling de 10% nos traces"
+cd /opt/obsf/observability-lab/modulo-2 && sudo ./atualizar.sh
 ```
 
-```bash
-git push origin main
-```
+O script mostra a taxa que entrou em vigor (`"trace_sample_rate":0.1`).
 
-No terminal da instância:
-
-```bash
-cd /opt/obsf/observability-lab/modulo-2
-```
-
-```bash
-sudo ./atualizar.sh
-```
-
-O script faz `git pull`, recria a app e mostra a taxa que entrou em vigor (`"trace_sample_rate":0.1`). O Jaeger e o Prometheus não são reiniciados, então o histórico é preservado.
-
-**Depois: com sampling.** Em cerca de um minuto:
+**Depois (taxa 0.1).** Em cerca de um minuto:
 
 - No Prometheus, a linha de traces cai para cerca de 10% da linha de requisições. A fração exata:
 
@@ -230,80 +277,31 @@ O script faz `git pull`, recria a app e mostra a taxa que entrou em vigor (`"tra
 sum(rate(traces_total{sampled="true"}[1m])) / sum(rate(traces_total[1m]))
 ```
 
-- Nos logs, todo registro continua tendo `trace_id`, mas agora com `"sampled":false` na maioria:
+- Nos logs, todo registro continua tendo `trace_id`, mas a maioria vem com `"sampled":false`:
 
 ```bash
 sudo docker logs --since 1m modulo-2-app-1 | grep -c '"sampled":false'
 ```
 
-- No Jaeger, busque os últimos 5 minutos: aparecem bem menos traces. Copie o `trace_id` de um log com `"sampled":false` e cole na busca: o Jaeger não encontra.
+- No Jaeger aparecem bem menos traces. Copie o `trace_id` de um log com `"sampled":false` e cole na busca: o Jaeger não encontra.
 - Os erros também são amostrados: a maioria dos 500 fica sem trace. É a limitação do head sampling.
 
-Para voltar, troque para `TRACE_SAMPLE_RATE=1.0`, faça commit, push e rode `sudo ./atualizar.sh` de novo.
+### Observações para a aula
 
-Material de apoio para projetar (abra no navegador): `observability-lab/modulo-2/assets/sampling.html` (com e sem sampling), `codigo-para-sinal.html` (o código que gera cada sinal) e `diagrama-arquitetura.html`.
+- **Logs** mostram o QUÊ aconteceu (eventos, um a um, com todo o contexto).
+- **Métricas** mostram agregados (quantos, quanto tempo).
+- **Traces** mostram a HISTÓRIA completa de uma requisição (início ao fim).
+- Nos logs o `endpoint` é o caminho real (`/orders/ORD-123`); nas métricas é a rota (`/orders/:id`). É proposital: um label por pedido criaria milhares de séries no Prometheus (alta cardinalidade).
 
-## 7. Observações para aula
+## 6. Módulo 3: OpenTelemetry
 
-- **Logs** mostram o QUÊ aconteceu (eventos, um a um, com todo o contexto)
-- **Métricas** mostram agregados (quantos, quanto tempo)
-- **Traces** mostram a HISTÓRIA completa de uma requisição (início ao fim)
-- Nos logs o `endpoint` é o caminho real (`/orders/ORD-123`); nas métricas é a rota (`/orders/:id`).
-  É proposital: um label por pedido criaria milhares de séries no Prometheus (alta cardinalidade).
+A mesma `checkout-api`, refeita com o SDK do OpenTelemetry. Prometheus, Grafana e Jaeger são os mesmos; muda a instrumentação de traces e logs.
 
-## 8. Apagar tudo
+Coloque no ar com `trocar-modulo.sh 3` e gere tráfego ([rotina](#rotina-de-cada-demo-módulos-2-3-e-4)). O gerador envia também o cabeçalho `X-Customer-Tier` (`premium` ou `standard`) e o campo `payment_method` (`credit_card`, `pix` ou `boleto`).
 
-```bash
-aws cloudformation delete-stack --stack-name obsf-modulo-2
-```
+Material para projetar: `observability-lab/modulo-3/assets/arquitetura-m2-m3.html` (as duas arquiteturas e o que mudou).
 
-Isso remove a instância, o Security Group e a Role. Nada fica cobrando depois.
-
-## Problemas comuns
-
-| Sintoma | O que fazer |
-|---------|-------------|
-| As URLs não abrem | Aguarde os 3 a 4 minutos iniciais. Se restringiu o `AllowedCidr` ao seu IP e ele mudou (outra rede, VPN), rode o passo 2 de novo com o IP atual. |
-| A demo não subiu | No terminal da instância: `sudo tail -50 /var/log/cloud-init-output.log`. O erro mais comum é o `git clone` falhar porque o repositório está privado ou o código não foi enviado. |
-| Atualizei o código | No terminal da instância: `cd /opt/obsf/observability-lab/modulo-2 && sudo ./atualizar.sh` |
-| `No default VPC` ao criar a stack | Crie uma com `aws ec2 create-default-vpc` ou use outra região. |
-
-## Segurança
-
-A demo usa HTTP sem criptografia, Grafana com `admin/admin` e Jaeger/Prometheus sem login. Com `0.0.0.0/0` tudo isso fica aberto para a internet: não coloque dados reais na demo e não deixe a stack ligada fora da aula.
-
-## Arquivos do módulo 2
-
-| Arquivo | Para que serve |
-|---------|----------------|
-| `aws/cloudformation.yaml` | Recursos da AWS (EC2, Security Group, IAM Role) |
-| `app.js` | A aplicação Express e toda a instrumentação |
-| `load.js` | Gerador de tráfego |
-| `docker-compose.yml` | App, Jaeger, Prometheus e Grafana |
-| `.env` | Variáveis (porta, nome do serviço, taxa de erro) |
-| `prometheus.yml` | Configuração do scrape (a cada 5s) |
-| `grafana/datasources.yml` | Datasource Prometheus pré-configurado |
-| `start.sh` | Sobe os containers e avisa quando estiver pronto |
-| `atualizar.sh` | Na instância: baixa a última versão do código e recria a app |
-| `assets/` | Diagrama e páginas de apoio para projetar na aula |
-
-## Rodar local (opcional)
-
-Com o Docker Desktop aberto, a mesma demo roda na sua máquina:
-
-```bash
-cd observability-lab/modulo-2 && ./start.sh
-```
-
-Endereços: app em http://localhost:3000, Jaeger em http://localhost:16686, Prometheus em http://localhost:9090 e Grafana em http://localhost:3001. Para parar: `docker compose down`.
-
----
-
-# Módulo 3: OpenTelemetry
-
-A mesma `checkout-api` do Módulo 2, refeita com o SDK do OpenTelemetry. Prometheus, Grafana e Jaeger são os mesmos; o que muda é a instrumentação de traces e logs.
-
-## O que mudou em relação ao Módulo 2
+### O que mudou em relação ao Módulo 2
 
 | | Módulo 2 | Módulo 3 |
 |---|----------|----------|
@@ -315,8 +313,6 @@ A mesma `checkout-api` do Módulo 2, refeita com o SDK do OpenTelemetry. Prometh
 | Logs | `trace_id` | `trace_id` + `span_id` + itens da baggage |
 | Erros | 5% aleatório no GET | Retries na gravação: até 3 tentativas, depois erro 500 |
 
-Hierarquia de um `POST /orders`:
-
 ```
 POST /orders                    auto-instrumentação HTTP
 └─ process_order                span de negócio: payment_method, customer_tier
@@ -325,68 +321,18 @@ POST /orders                    auto-instrumentação HTTP
    └─ send_confirmation_email   ~150 ms  evento: email.send.queued
 ```
 
-## Conceitos
+### Conceitos
 
 | Conceito | O que é | Onde ver no código | Onde ver na demo |
 |----------|---------|--------------------|------------------|
 | **Atributo** | Um par chave/valor que descreve **um span**. Serve de filtro na busca. | `span.setAttributes({ payment_method, customer_tier })` em `app.js` | Jaeger, aba **Tags** do span `process_order` |
-| **Baggage** | Dados que **viajam com a requisição** pelo contexto, de um span para o próximo (e entre serviços). Sozinha ela não aparece em lugar nenhum: alguém precisa ler e usar. | `propagation.createBaggage(...)` em `app.js`; a classe `BaggageParaAtributos` em `tracing.js` copia cada item para os spans | `customer_id`, `order_id` e `correlation_id` em **todos** os spans filhos e em todas as linhas de log |
+| **Baggage** | Dados que **viajam com a requisição** pelo contexto, de um span para o próximo (e entre serviços). Sozinha ela não aparece em lugar nenhum: alguém precisa ler e usar. | `propagation.createBaggage(...)` em `app.js`; a classe `BaggageParaAtributos` em `tracing.js` copia cada item para os spans | `customer_id`, `order_id` e `correlation_id` em todos os spans filhos e em todas as linhas de log |
 | **Evento** | Um **momento** dentro de um span, com horário exato. É como um log preso ao span. | `span.addEvent('order.validation.passed')` | Jaeger, seção **Logs** dentro do span |
 | **Correlação de logs** | Toda linha de log carrega o `trace_id` e o `span_id` do span ativo. | `mixin()` do Pino em `app.js` | `docker logs`: copie o `trace_id` e cole na busca do Jaeger |
 
 Regra prática: **atributo** responde "como era esta operação?", **evento** responde "o que aconteceu durante ela, e quando?", **baggage** responde "que contexto as próximas etapas precisam conhecer?".
 
-## Subir a demo
-
-### Opção A: na mesma instância do Módulo 2 (recomendado)
-
-Usa a stack `obsf-modulo-2` que já existe; os endereços continuam os mesmos. Depois de publicar o código do Módulo 3 no GitHub (`git add -A`, `git commit`, `git push origin main`), no terminal da instância:
-
-```bash
-cd /opt/obsf && sudo git pull
-```
-
-```bash
-cd /opt/obsf/observability-lab/modulo-2 && sudo docker compose down
-```
-
-```bash
-cd /opt/obsf/observability-lab/modulo-3 && sudo ./start.sh
-```
-
-Para voltar ao Módulo 2, faça o inverso: `docker compose down` na pasta `modulo-3` e `./start.sh` na `modulo-2`. Os dois módulos usam as mesmas portas, então só um roda por vez.
-
-### Opção B: uma instância só para o Módulo 3
-
-```bash
-aws cloudformation deploy --stack-name obsf-modulo-3 --template-file observability-lab/modulo-3/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
-```
-
-```bash
-aws cloudformation describe-stacks --stack-name obsf-modulo-3 --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
-```
-
-Vale tudo o que está descrito no Módulo 2 (tempo de espera, segurança, custo). Ao final: `aws cloudformation delete-stack --stack-name obsf-modulo-3`.
-
-### Opção C: local
-
-```bash
-cd observability-lab/modulo-3 && ./start.sh
-```
-
-## Gerar tráfego
-
-No terminal da instância (ou local), dentro de `observability-lab/modulo-3`:
-
-```bash
-sudo docker compose run --rm load
-```
-
-Igual ao do Módulo 2, com dois acréscimos: o cabeçalho `X-Customer-Tier` (`premium` ou `standard`) e o campo `payment_method` (`credit_card`, `pix` ou `boleto`).
-
-## O que mostrar
-
-### 1. Hierarquia e timeline (Jaeger)
+### Hierarquia e timeline (Jaeger)
 
 1. Service `checkout-api`, Operation `POST /orders`, **Find Traces**.
 2. Abra um trace: são 5 spans. A timeline mostra que `save_to_database` é a etapa mais demorada.
@@ -394,7 +340,7 @@ Igual ao do Módulo 2, com dois acréscimos: o cabeçalho `X-Customer-Tier` (`pr
 4. Clique em `validate_order` → **Logs**: os eventos `order.validation.started` e `order.validation.passed`, com o horário de cada um.
 5. Clique em `save_to_database`: o atributo `tentativas` e, quando houve nova tentativa, o evento `database.insert.retry`.
 
-### 2. Buscar por atributo
+### Buscar por atributo
 
 No campo **Tags** da busca do Jaeger:
 
@@ -405,13 +351,13 @@ No campo **Tags** da busca do Jaeger:
 | `tentativas=2` | Gravações que precisaram de uma segunda tentativa |
 | `error=true` | Pedidos inválidos (400) e falhas de banco (500) |
 
-### 3. Um erro de ponta a ponta
+### Um erro de ponta a ponta
 
 1. Busque `error=true` com Operation `POST /orders` e abra um trace com status 500.
 2. `save_to_database` aparece em vermelho, com três eventos `database.insert.retry` e um evento `exception` com a mensagem e a stack trace.
 3. O erro sobe pela hierarquia: `process_order` e `POST /orders` também ficam marcados.
 
-### 4. Do log ao trace
+### Do log ao trace
 
 ```bash
 sudo docker logs modulo-3-app-1 | grep '"level":"ERROR"' | tail -1
@@ -421,35 +367,21 @@ Copie o `trace_id` e cole na busca do Jaeger: abre o trace daquela requisição.
 
 O Jaeger não exibe os logs da aplicação, então o caminho é sempre log → `trace_id` → Jaeger. Os "Logs" que aparecem dentro de um span no Jaeger são os **eventos** do span.
 
-Exemplo de linha de log (uma por etapa do pedido):
-
 ```json
 {"level":"INFO","timestamp":"2026-10-06T20:40:01.351Z","service":"checkout-api","trace_id":"b2d9f3f1172fe36f2a47271fe41007b2","span_id":"fd7964e987e9ccfd","customer_id":"CUST-293","order_id":"ORD-6d000d1b","correlation_id":"462ab034-59e6-4d81-b2e2-6e28905df7c3","message":"pedido validado"}
 ```
 
-### 5. Métricas e sampling
+Métricas e sampling continuam como no Módulo 2: mesmas queries e mesmo `TRACE_SAMPLE_RATE`, agora no `.env` da pasta `modulo-3`.
 
-Continuam como no Módulo 2: mesmas queries no Prometheus, mesmo `TRACE_SAMPLE_RATE` no `.env` e mesmo `sudo ./atualizar.sh` (agora na pasta `modulo-3`).
+## 7. Módulo 4: Service mapping
 
-## Arquivos do módulo 3
+A `checkout-api` passa a chamar um segundo serviço, o `payment-service`, para cobrar o pedido. O foco é a **propagação de contexto**: os dois serviços escrevem spans no mesmo trace, e o Jaeger monta o mapa de serviços a partir disso.
 
-| Arquivo | Para que serve |
-|---------|----------------|
-| `tracing.js` | Configuração do OpenTelemetry: recurso, sampler, exportador, auto-instrumentação e baggage → atributos |
-| `app.js` | A aplicação: hierarquia de spans, baggage, atributos, eventos e logs correlacionados |
-| `load.js` | Gerador de tráfego |
-| `.env` | Variáveis (taxa de falha do banco, taxa de sampling) |
-| Demais arquivos | Iguais aos do Módulo 2 (Docker Compose, Prometheus, Grafana, scripts, template da AWS) |
+Coloque no ar com `trocar-modulo.sh 4` e gere tráfego ([rotina](#rotina-de-cada-demo-módulos-2-3-e-4)). Com 5% de timeout no pagamento e uma nova tentativa automática, quase todos os pedidos terminam em 201; cerca de 1 a cada 400 termina em 502.
 
----
+Material para projetar, em `observability-lab/modulo-4/assets/`: `infografico-opentelemetry.html` (OpenTelemetry em uma página) e `infografico-open-source.html` (panorama de ferramentas, com o que usamos na demo e as de IA).
 
-# Módulo 4: Service mapping
-
-A `checkout-api` do Módulo 3 passa a chamar um segundo serviço, o `payment-service`, para cobrar o pedido. O foco é a **propagação de contexto**: os dois serviços escrevem spans no mesmo trace, e o Jaeger monta o mapa de serviços a partir disso.
-
-Material de apoio para projetar: `observability-lab/modulo-4/assets/infografico-opentelemetry.html` e `infografico-open-source.html`.
-
-## O que mudou em relação ao Módulo 3
+### O que mudou em relação ao Módulo 3
 
 | | Módulo 3 | Módulo 4 |
 |---|----------|----------|
@@ -459,8 +391,6 @@ Material de apoio para projetar: `observability-lab/modulo-4/assets/infografico-
 | Baggage | Entre spans do mesmo processo | Atravessa a rede no cabeçalho `baggage` |
 | Falhas | Retries na gravação | Timeout em 5% dos pagamentos, com 1 nova tentativa |
 | Prometheus | 1 alvo | 2 alvos; o rótulo `job` separa os serviços |
-
-Trace de um `POST /orders`:
 
 ```
 checkout-api     POST /orders
@@ -472,7 +402,7 @@ payment-service        └─ POST /process-payment    lê o traceparent e conti
 payment-service           └─ process_payment       vermelho quando dá timeout
 ```
 
-## Como o trace atravessa a rede
+### Como o trace atravessa a rede
 
 1. Em `api/app.js`, dentro do span `call_payment_service`, a linha `propagation.inject(context.active(), headers)` grava dois cabeçalhos HTTP padrão W3C:
 
@@ -487,82 +417,30 @@ baggage:     customer_id=CUST-387,order_id=ORD-34b2424d,correlation_id=6aa000d0-
 
 Se o cabeçalho não fosse enviado, cada serviço teria seu próprio trace e não haveria como ligar um ao outro.
 
-## Subir a demo
-
-### Opção A: na instância que já existe (recomendado)
-
-Depois de publicar o código no GitHub, no terminal da instância:
-
-```bash
-cd /opt/obsf && sudo git pull
-```
-
-Derrube o módulo que estiver no ar (troque `modulo-3` por `modulo-2` se for o caso):
-
-```bash
-cd /opt/obsf/observability-lab/modulo-3 && sudo docker compose down
-```
-
-```bash
-cd /opt/obsf/observability-lab/modulo-4 && sudo ./start.sh
-```
-
-Na primeira vez o `start.sh` constrói as imagens dos dois serviços, o que leva de 1 a 2 minutos. Os endereços e portas são os mesmos dos módulos anteriores.
-
-### Opção B: uma instância só para o Módulo 4
-
-```bash
-aws cloudformation deploy --stack-name obsf-modulo-4 --template-file observability-lab/modulo-4/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
-```
-
-```bash
-aws cloudformation describe-stacks --stack-name obsf-modulo-4 --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
-```
-
-Ao final: `aws cloudformation delete-stack --stack-name obsf-modulo-4`.
-
-### Opção C: local
-
-```bash
-cd observability-lab/modulo-4 && ./start.sh
-```
-
-## Gerar tráfego
-
-Dentro de `observability-lab/modulo-4`:
-
-```bash
-sudo docker compose run --rm load
-```
-
-É o mesmo gerador do Módulo 3. Com 5% de timeout no pagamento e uma nova tentativa automática, quase todos os pedidos terminam em 201; cerca de 1 a cada 400 termina em 502.
-
-## O que mostrar
-
-### 1. Mapa de serviços (Jaeger)
+### Mapa de serviços (Jaeger)
 
 1. No Jaeger, abra **System Architecture** (em versões mais antigas da interface, **Dependencies**).
 2. Aparecem duas caixas, `checkout-api` e `payment-service`, ligadas por uma seta com o número de chamadas.
 3. Ninguém desenhou esse mapa: ele é calculado a partir dos traces, olhando qual serviço é pai de qual.
 
-O mapa do Jaeger mostra apenas a contagem de chamadas. Taxa de requisições, erro e latência por serviço vêm do Prometheus (item 4).
+O mapa do Jaeger mostra apenas a contagem de chamadas. Taxa de requisições, erro e latência por serviço vêm do Prometheus (mais abaixo).
 
-### 2. Um trace com os dois serviços
+### Um trace com os dois serviços
 
 1. Service `checkout-api`, Operation `POST /orders`, **Find Traces**.
 2. Abra um trace: 7 spans, com cores diferentes para cada serviço.
 3. Clique em `process_payment`: nas **Tags** estão `customer_id`, `order_id` e `correlation_id`, que vieram pela baggage.
 
-### 3. Um erro que atravessa os serviços
+### Um erro que atravessa os serviços
 
 1. Na busca, Service `payment-service` e **Tags** `error=true`.
-2. Abra um trace: o primeiro `process_payment` está em vermelho, com o evento `payment.gateway.timeout` e dura cerca de 1 segundo.
+2. Abra um trace: o primeiro `process_payment` está em vermelho, com o evento `payment.gateway.timeout`, e dura cerca de 1 segundo.
 3. Logo abaixo há um segundo `POST /process-payment`, bem-sucedido: é a nova tentativa. O span `call_payment_service` mostra `tentativas=2` e os eventos `payment.failed` e `payment.approved`.
 4. O cliente recebeu 201, mas esperou 1 segundo a mais. Sem o trace, isso seria só "uma requisição lenta".
 
-Para ver um pedido que falhou de vez, busque Service `checkout-api` com **Tags** `http.response.status_code=502`. Para que aconteça com mais frequência, aumente `PAYMENT_ERROR_RATE` no `.env` (por exemplo `0.3`) e rode `sudo ./atualizar.sh`.
+Para ver um pedido que falhou de vez, busque Service `checkout-api` com **Tags** `http.response.status_code=502`. Para que aconteça com mais frequência, aumente `PAYMENT_ERROR_RATE` em `observability-lab/modulo-4/.env` (por exemplo `0.3`), publique e rode `sudo ./atualizar.sh`.
 
-### 4. Números por serviço (Prometheus)
+### Números por serviço (Prometheus)
 
 ```promql
 # Requisições por segundo, por serviço
@@ -581,7 +459,7 @@ histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bu
 
 O `payment-service` mostra cerca de 5% de erro; a `checkout-api` mostra quase zero, porque a nova tentativa esconde a falha do cliente. A latência p95 da `checkout-api` é que denuncia o problema.
 
-### 5. O mesmo trace nos logs dos dois serviços
+### O mesmo trace nos logs dos dois serviços
 
 Pegue um `trace_id` de um pagamento com falha:
 
@@ -597,26 +475,11 @@ sudo docker logs modulo-4-api-1 | grep TRACE_ID
 
 As linhas dos dois serviços têm o mesmo `trace_id` e o mesmo `correlation_id`. O log `pagamento recebido` do `payment-service` mostra os cabeçalhos `traceparent` e `baggage` exatamente como chegaram.
 
-## Arquivos do módulo 4
+## 8. Módulo 5: DataOps e CIA Triad
 
-| Arquivo | Para que serve |
-|---------|----------------|
-| `api/app.js` | A `checkout-api`; a novidade é a função `chamarPagamento` |
-| `payment-service/app.js` | O serviço de pagamentos |
-| `api/tracing.js`, `payment-service/tracing.js` | Configuração do OpenTelemetry, igual nos dois; o nome do serviço vem da variável `SERVICE_NAME` |
-| `api/Dockerfile`, `payment-service/Dockerfile` | Imagem de cada serviço |
-| `docker-compose.yml` | Os dois serviços, Jaeger, Prometheus e Grafana |
-| `prometheus.yml` | Um job de scrape por serviço |
-| `.env` | Taxa de timeout do pagamento, sampling e endereços |
-| `start.sh`, `atualizar.sh` | Sobem e atualizam a demo (agora com `--build`) |
+Telemetria também é dado. Este módulo aplica a tríade CIA aos logs, métricas e traces da `checkout-api`. Não usa a AWS: é um infográfico e um exemplo que roda no seu computador.
 
----
-
-# Módulo 5: DataOps e CIA Triad
-
-Telemetria também é dado. Este módulo aplica a tríade CIA (confidencialidade, integridade e disponibilidade) aos logs, métricas e traces da `checkout-api`. Não há nada para subir na AWS: é um infográfico e um exemplo de código que roda em segundos.
-
-## CIA Triad na Observabilidade
+### CIA Triad na observabilidade
 
 | Pilar | O que significa | Na observabilidade |
 |-------|-----------------|--------------------|
@@ -624,13 +487,13 @@ Telemetria também é dado. Este módulo aplica a tríade CIA (confidencialidade
 | **Integrity** (Integridade) | Dados não podem ser alterados | O `trace_id` é o mesmo do início ao fim da requisição, o `timestamp` é gravado na origem e não muda, e o hash do payload denuncia qualquer alteração |
 | **Availability** (Disponibilidade) | Dados sempre acessíveis quando necessário | Backup de métricas (Prometheus em alta disponibilidade) e persistência de traces (Jaeger com armazenamento em disco) |
 
-Infográfico interativo para projetar: abra `observability-lab/modulo-5/assets/cia-triad.html` no navegador e clique em cada círculo.
+Infográfico para projetar: abra `observability-lab/modulo-5/assets/cia-triad.html` e clique em cada círculo.
 
 Sobre disponibilidade, a demo dos módulos anteriores é um bom contraexemplo: há um único Prometheus e o Jaeger guarda os traces em memória, então reiniciar o container apaga tudo.
 
-## Data Masking na Prática
+### Data masking na prática
 
-A biblioteca `observability-lab/modulo-5/data-masking.js` não tem dependências e traz:
+A biblioteca `observability-lab/modulo-5/data-masking.js` não tem dependências:
 
 | Função | Antes | Depois |
 |--------|-------|--------|
@@ -642,7 +505,7 @@ A biblioteca `observability-lab/modulo-5/data-masking.js` não tem dependências
 | `pseudonymize` | `CUST-295` | `pseudo-165c596bcce9` (código estável por cliente) |
 | `maskSensitiveFields` | um objeto inteiro | cópia com todos os campos sensíveis conhecidos mascarados |
 
-### Rodar o exemplo
+Rodar o exemplo, no seu computador:
 
 ```bash
 cd observability-lab/modulo-5
@@ -662,9 +525,7 @@ docker run --rm -v "$PWD":/app -w /app node:22-alpine node exemplo.js
 
 O exemplo mostra cada função isolada, o mesmo log antes e depois do mascaramento, a diferença entre mascarar e pseudonimizar, e o hash do payload (integridade).
 
-### Usar nos logs
-
-Campo a campo:
+Uso nos logs, campo a campo:
 
 ```javascript
 const { maskEmail, maskCreditCard } = require('./data-masking');
@@ -692,10 +553,73 @@ O mesmo vale para traces: mascare o valor antes de `span.setAttribute(...)` e an
 - **Mascarar ou pseudonimizar?** `maskCustomerId` transforma todos os clientes em `CUST-****`, e a correlação por cliente dos Módulos 3 e 4 deixa de funcionar. `pseudonymize` troca o valor por um código estável: ainda dá para seguir o mesmo cliente, sem saber quem ele é. O segredo usado precisa ficar fora do código.
 - **O melhor dado sensível é o que não foi coletado.** Antes de mascarar, vale perguntar se o campo precisa mesmo estar no log.
 
-## Arquivos do módulo 5
+---
 
-| Arquivo | Para que serve |
-|---------|----------------|
-| `assets/cia-triad.html` | Infográfico interativo da tríade CIA |
-| `data-masking.js` | Funções de mascaramento e pseudonimização |
-| `exemplo.js` | Demonstração executável: antes e depois, e hash de integridade |
+# Encerramento
+
+## 9. Apagar tudo
+
+```bash
+aws cloudformation delete-stack --stack-name obsf-modulo-2
+```
+
+Isso remove a instância, o Security Group e a Role. Nada fica cobrando depois.
+
+---
+
+# Referência
+
+## Problemas comuns
+
+| Sintoma | O que fazer |
+|---------|-------------|
+| As URLs não abrem | Aguarde os 3 a 4 minutos iniciais. Se restringiu o `AllowedCidr` ao seu IP e ele mudou (outra rede, VPN), rode o passo 2 de novo com o IP atual. |
+| A demo não subiu depois de criar a stack | No terminal da instância: `sudo tail -50 /var/log/cloud-init-output.log`. O erro mais comum é o `git clone` falhar porque o repositório está privado ou o código não foi enviado. |
+| `trocar-modulo.sh` não existe na instância | A instância foi criada antes de o script entrar no repositório. O comando da rotina já começa com `git pull`, que o traz. |
+| O Jaeger mostra dados do módulo anterior | Não deveria: cada troca de módulo recria o Jaeger, que guarda os traces em memória. Confira qual módulo está no ar com `sudo docker ps`. |
+| `No default VPC` ao criar a stack | Crie uma com `aws ec2 create-default-vpc` ou use outra região. |
+
+## Segurança
+
+A demo usa HTTP sem criptografia, Grafana com `admin/admin` e Jaeger/Prometheus sem login. Com `0.0.0.0/0` tudo isso fica aberto para a internet: não coloque dados reais na demo e não deixe a stack ligada fora da aula.
+
+## Rodar local (opcional)
+
+Com o Docker Desktop aberto, as mesmas demos rodam na sua máquina. Na raiz do repositório:
+
+```bash
+observability-lab/trocar-modulo.sh 3
+```
+
+Endereços: app em http://localhost:3000, Jaeger em http://localhost:16686, Prometheus em http://localhost:9090 e Grafana em http://localhost:3001. Para derrubar:
+
+```bash
+observability-lab/trocar-modulo.sh parar
+```
+
+## Estrutura do repositório
+
+```
+observability-lab/
+├── trocar-modulo.sh          coloca no ar a demo do módulo 2, 3 ou 4
+├── modulo-1/assets/          infográficos de conceitos
+├── modulo-2/                 checkout-api com os 3 pilares
+│   ├── aws/cloudformation.yaml   o ambiente da AWS (usado por todos os módulos)
+│   ├── app.js, load.js, .env
+│   ├── docker-compose.yml, prometheus.yml, grafana/
+│   ├── start.sh, atualizar.sh
+│   └── assets/               diagrama, código → sinal, sampling
+├── modulo-3/                 checkout-api com OpenTelemetry
+│   ├── tracing.js            configuração do OpenTelemetry
+│   ├── app.js, load.js, .env e os mesmos arquivos de infraestrutura
+│   └── assets/               comparação das arquiteturas M2 e M3
+├── modulo-4/                 dois serviços
+│   ├── api/                  checkout-api (app.js, tracing.js, Dockerfile)
+│   ├── payment-service/      serviço de pagamentos (app.js, tracing.js, Dockerfile)
+│   ├── docker-compose.yml, prometheus.yml, .env, load.js, start.sh, atualizar.sh
+│   └── assets/               infográficos de OpenTelemetry e do cenário open source
+└── modulo-5/
+    ├── data-masking.js       funções de mascaramento
+    ├── exemplo.js            demonstração executável
+    └── assets/cia-triad.html infográfico da tríade CIA
+```
