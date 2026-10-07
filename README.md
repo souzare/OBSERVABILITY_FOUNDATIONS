@@ -297,11 +297,264 @@ sudo docker logs --since 1m modulo-2-app-1 | grep -c '"sampled":false'
 
 A mesma `checkout-api`, refeita com o SDK do OpenTelemetry. Prometheus, Grafana e Jaeger são os mesmos; muda a instrumentação de traces e logs.
 
-Coloque no ar com `trocar-modulo.sh 3` e gere tráfego ([rotina](#rotina-de-cada-demo-módulos-2-3-e-4)). O gerador envia também o cabeçalho `X-Customer-Tier` (`premium` ou `standard`) e o campo `payment_method` (`credit_card`, `pix` ou `boleto`).
+A demo segue 8 mudanças, uma por vez. Para cada uma: **mostre o código** (abra `observability-lab/modulo-2/app.js` e `observability-lab/modulo-3/app.js` lado a lado no editor) e depois **prove na demo**.
 
-Material para projetar: `observability-lab/modulo-3/assets/arquitetura-m2-m3.html` (as duas arquiteturas e o que mudou).
+| Passo | Mudança | Arquivo | Onde provar |
+|-------|---------|---------|-------------|
+| 6.0 | Colocar o Módulo 3 no ar | — | `AppUrl/metrics` responde |
+| 6.1 | A configuração sai do `app.js` | `tracing.js` | Log de início da aplicação |
+| 6.2 | Auto-instrumentação cria o span da requisição | `tracing.js`, `app.js` | Jaeger: span `POST /orders` com tags `http.*` |
+| 6.3 | Hierarquia de spans | `app.js` | Jaeger: 5 spans em árvore |
+| 6.4 | Atributos de negócio | `app.js` | Jaeger: busca por tag |
+| 6.5 | Baggage | `app.js`, `tracing.js` | Jaeger: mesmas tags em todos os spans filhos |
+| 6.6 | Eventos de span | `app.js` | Jaeger: seção **Logs** do span |
+| 6.7 | Logs correlacionados | `app.js` | Terminal: `trace_id` e `span_id` em toda linha |
+| 6.8 | Tratamento de erros | `app.js` | Jaeger: trace vermelho de ponta a ponta |
 
-### O que mudou em relação ao Módulo 2
+Material para projetar: `observability-lab/modulo-3/assets/arquitetura-m2-m3.html` (as duas arquiteturas e o que mudou). Os números de linha abaixo são do código atual; se você editar os arquivos, eles se deslocam.
+
+### 6.0 Colocar o Módulo 3 no ar
+
+No terminal da instância:
+
+```bash
+cd /opt/obsf && sudo git pull && sudo observability-lab/trocar-modulo.sh 3
+```
+
+Em uma segunda aba, gere tráfego e deixe rodando durante toda a demo:
+
+```bash
+cd /opt/obsf/observability-lab/modulo-3 && sudo docker compose run --rm load
+```
+
+O gerador é o do Módulo 2 com dois acréscimos: o cabeçalho `X-Customer-Tier` (`premium` ou `standard`) e o campo `payment_method` (`credit_card`, `pix` ou `boleto`).
+
+### 6.1 A configuração sai do `app.js`
+
+**O que dizer:** no Módulo 2, o SDK era configurado no meio do `app.js`. Agora ele tem um arquivo próprio, que precisa ser carregado antes de todo o resto.
+
+**No código:**
+
+- `modulo-3/app.js`, linha 12: `const config = require('./tracing');` é a primeira linha executável, antes do `require('express')`.
+- `modulo-3/tracing.js`, linhas 38 a 70: o `NodeSDK` com recurso (quem somos), sampler, processadores e instrumentações.
+
+```javascript
+// PRECISA ser a primeira linha: liga o OpenTelemetry antes de carregar o Express
+const config = require('./tracing');
+```
+
+**Na demo:** a ordem importa porque a auto-instrumentação (próximo passo) precisa "envolver" os módulos `http` e `express` no momento em que são carregados. Mostre o log de início, que confirma a configuração:
+
+```bash
+sudo docker logs modulo-3-app-1 | grep '"checkout-api no ar"'
+```
+
+### 6.2 Auto-instrumentação cria o span da requisição
+
+**O que dizer:** no Módulo 2 nós abríamos e fechávamos o span de cada requisição na mão. Agora uma biblioteca faz isso sozinha para todo tráfego HTTP.
+
+**No código, antes** (`modulo-2/app.js`, dentro do middleware):
+
+```javascript
+const span = tracer.startSpan(`${req.method} ${req.path}`, { kind: SpanKind.SERVER });
+// ... dezenas de linhas depois ...
+span.end();
+```
+
+**Depois** (`modulo-3/tracing.js`, linhas 57 a 67):
+
+```javascript
+instrumentations: [
+  new HttpInstrumentation({
+    ignoreIncomingRequestHook: (req) => req.url === '/metrics',
+  }),
+  new ExpressInstrumentation({
+    ignoreLayersType: ['middleware', 'router', 'request_handler'],
+  }),
+],
+```
+
+No `modulo-3/app.js`, o middleware (linha 102) não tem mais `startSpan` nem `span.end()`: ficou só com métricas e log.
+
+**Na demo:**
+
+1. Jaeger → Service `checkout-api`, Operation `GET /orders/:id`, **Find Traces**.
+2. Abra um trace e clique no span `GET /orders/:id`. Nas **Tags** há atributos que ninguém escreveu: `http.request.method`, `http.route`, `http.response.status_code`, `url.path`.
+3. Procure a operação `GET /metrics` na lista de operações: ela não existe. O `ignoreIncomingRequestHook` impede que o scrape do Prometheus gere um trace a cada 5 segundos.
+
+### 6.3 Hierarquia de spans
+
+**O que dizer:** a auto-instrumentação conhece o HTTP, mas não o nosso negócio. As etapas do pedido somos nós que marcamos, e cada etapa vira um span filho.
+
+**No código** (`modulo-3/app.js`):
+
+- Linha 86, função `emSpan`: cria um span filho do span ativo, roda a função dentro dele e sempre o encerra.
+- Linhas 174 a 185: `process_order` chama as três etapas em sequência.
+- Linhas 196, 215 e 251: `validarPedido`, `salvarNoBanco` e `enviarEmailDeConfirmacao`, cada uma dentro do seu `emSpan`.
+
+```javascript
+emSpan('process_order', async (span) => {
+  await validarPedido(order);            // span validate_order
+  await salvarNoBanco(order);            // span save_to_database
+  await enviarEmailDeConfirmacao(order); // span send_confirmation_email
+})
+```
+
+**Na demo:**
+
+1. Jaeger → Operation `POST /orders`, **Find Traces**, abra um trace.
+2. São 5 spans em árvore (no Módulo 2 eram 2):
+
+```
+POST /orders                    auto-instrumentação HTTP
+└─ process_order                span de negócio
+   ├─ validate_order            ~50 ms
+   ├─ save_to_database          ~200 ms por tentativa
+   └─ send_confirmation_email   ~150 ms
+```
+
+3. Pergunte à turma qual etapa é a mais lenta. A timeline responde sem ninguém ler código: `save_to_database`.
+
+### 6.4 Atributos de negócio
+
+**O que dizer:** um atributo é um par chave/valor que descreve **um span**. Ele vira filtro na busca.
+
+**No código** (`modulo-3/app.js`, linhas 176 a 179):
+
+```javascript
+span.setAttributes({
+  payment_method,
+  customer_tier: req.get('x-customer-tier') || 'standard',
+});
+```
+
+Em `salvarNoBanco` (linha 244): `tentativas`, `rows_affected` e `db_latency_ms`.
+
+**Na demo:** no campo **Tags** da busca do Jaeger:
+
+| Busca | O que encontra |
+|-------|----------------|
+| `customer_tier=premium` | Pedidos de clientes premium |
+| `payment_method=pix` | Pedidos pagos com pix |
+| `tentativas=2` | Gravações que precisaram de uma segunda tentativa |
+
+Abra um resultado e clique em `process_order` → **Tags** para ver os valores.
+
+### 6.5 Baggage
+
+**O que dizer:** o atributo pertence a um span. A baggage **viaja com a requisição**: o que é colocado nela fica disponível para todas as etapas seguintes. Sozinha ela não aparece em lugar nenhum; alguém precisa ler e usar.
+
+**No código:**
+
+- `modulo-3/app.js`, linhas 165 a 170: a baggage é criada com `customer_id`, `order_id` e `correlation_id` e anexada ao contexto.
+- `modulo-3/tracing.js`, linha 25, classe `BaggageParaAtributos`: copia cada item da baggage para todo span que nasce.
+
+```javascript
+const bagagem = propagation.createBaggage({
+  customer_id: { value: String(customer_id ?? 'desconhecido') },
+  order_id: { value: order.order_id },
+  correlation_id: { value: res.locals.correlation_id },
+});
+const contextoComBagagem = propagation.setBaggage(context.active(), bagagem);
+```
+
+**Na demo:**
+
+1. No mesmo trace, clique em `validate_order`, depois em `save_to_database`, depois em `send_confirmation_email`.
+2. Os três têm `customer_id`, `order_id` e `correlation_id` nas **Tags**, embora nenhuma dessas funções faça `setAttribute` com esses campos.
+3. Clique no span raiz `POST /orders`: ele **não** tem esses campos, porque nasceu antes de a baggage ser criada. É a diferença entre atributo (de um span) e baggage (da requisição, dali em diante).
+
+### 6.6 Eventos de span
+
+**O que dizer:** um evento é um **momento** dentro de um span, com horário exato. É como um log preso ao span.
+
+**No código** (`modulo-3/app.js`):
+
+| Linha | Evento |
+|-------|--------|
+| 199 | `order.validation.started` |
+| 203 / 209 | `order.validation.failed` / `order.validation.passed` |
+| 226 | `database.insert.retry` |
+| 245 | `database.insert.completed` |
+| 254 | `email.send.queued` |
+
+```javascript
+span.addEvent('order.validation.started');
+await esperar(50);
+// ...
+span.addEvent('order.validation.passed');
+```
+
+**Na demo:**
+
+1. No trace, clique em `validate_order` e abra a seção **Logs**: aparecem os dois eventos, cada um com o instante em que ocorreu dentro do span.
+2. Busque `tentativas=2`, abra um trace e clique em `save_to_database`: o evento `database.insert.retry` marca o momento exato da falha, e a barra do span tem cerca de 400 ms em vez de 200.
+
+### 6.7 Logs correlacionados
+
+**O que dizer:** toda linha de log passa a carregar o `trace_id` e o `span_id` do span ativo, mais os itens da baggage. Ninguém precisa lembrar de incluir esses campos em cada `logger.info`.
+
+**No código** (`modulo-3/app.js`, linhas 35 a 44, dentro da configuração do Pino):
+
+```javascript
+mixin() {
+  const span = trace.getActiveSpan();
+  if (!span) return {};
+  const campos = { trace_id: span.spanContext().traceId, span_id: span.spanContext().spanId };
+  const bagagem = propagation.getActiveBaggage();
+  if (bagagem) {
+    for (const [chave, item] of bagagem.getAllEntries()) campos[chave] = item.value;
+  }
+  return campos;
+},
+```
+
+Compare com a chamada na linha 210, que não passa nenhum campo: `logger.info('pedido validado');`
+
+**Na demo:**
+
+```bash
+sudo docker logs --since 30s modulo-3-app-1 | grep '"pedido validado"' | tail -1
+```
+
+```json
+{"level":"INFO","timestamp":"2026-10-06T20:40:01.351Z","service":"checkout-api","trace_id":"b2d9f3f1172fe36f2a47271fe41007b2","span_id":"fd7964e987e9ccfd","customer_id":"CUST-293","order_id":"ORD-6d000d1b","correlation_id":"462ab034-59e6-4d81-b2e2-6e28905df7c3","message":"pedido validado"}
+```
+
+Copie o `trace_id` e cole na busca do Jaeger: abre o trace daquela requisição. O `span_id` indica em qual span o log foi escrito (neste caso, `validate_order`).
+
+O Jaeger não exibe os logs da aplicação, então o caminho é sempre log → `trace_id` → Jaeger. Os "Logs" que aparecem dentro de um span no Jaeger são os **eventos** do passo 6.6.
+
+### 6.8 Tratamento de erros
+
+**O que dizer:** quando uma etapa falha, o span dela registra a exceção e fica marcado com erro, e o erro sobe pela hierarquia.
+
+**No código** (`modulo-3/app.js`, linhas 90 a 93, dentro de `emSpan`):
+
+```javascript
+} catch (erro) {
+  span.recordException(erro);
+  span.setStatus({ code: SpanStatusCode.ERROR, message: erro.message });
+  throw erro;
+}
+```
+
+Em `salvarNoBanco` (linha 215), cada tentativa de gravação falha 30% das vezes (`DB_ERROR_RATE` no `.env`); depois de 3 tentativas, a função lança erro.
+
+**Na demo:**
+
+1. Jaeger → Operation `POST /orders`, **Tags** `http.response.status_code=500`, **Find Traces**.
+2. Abra um trace: `save_to_database` está em vermelho, com três eventos `database.insert.retry` e um evento `exception` com a mensagem e a stack trace.
+3. `process_order` e `POST /orders` também ficam marcados: o erro subiu até a raiz.
+4. Feche o ciclo pelo log:
+
+```bash
+sudo docker logs modulo-3-app-1 | grep '"level":"ERROR"' | tail -1
+```
+
+O `trace_id` dessa linha leva ao mesmo tipo de trace no Jaeger.
+
+### Resumo para fechar o módulo
 
 | | Módulo 2 | Módulo 3 |
 |---|----------|----------|
@@ -313,63 +566,7 @@ Material para projetar: `observability-lab/modulo-3/assets/arquitetura-m2-m3.htm
 | Logs | `trace_id` | `trace_id` + `span_id` + itens da baggage |
 | Erros | 5% aleatório no GET | Retries na gravação: até 3 tentativas, depois erro 500 |
 
-```
-POST /orders                    auto-instrumentação HTTP
-└─ process_order                span de negócio: payment_method, customer_tier
-   ├─ validate_order            ~50 ms   eventos: order.validation.started / passed / failed
-   ├─ save_to_database          ~200 ms por tentativa   atributos: tentativas, rows_affected, db_latency_ms
-   └─ send_confirmation_email   ~150 ms  evento: email.send.queued
-```
-
-### Conceitos
-
-| Conceito | O que é | Onde ver no código | Onde ver na demo |
-|----------|---------|--------------------|------------------|
-| **Atributo** | Um par chave/valor que descreve **um span**. Serve de filtro na busca. | `span.setAttributes({ payment_method, customer_tier })` em `app.js` | Jaeger, aba **Tags** do span `process_order` |
-| **Baggage** | Dados que **viajam com a requisição** pelo contexto, de um span para o próximo (e entre serviços). Sozinha ela não aparece em lugar nenhum: alguém precisa ler e usar. | `propagation.createBaggage(...)` em `app.js`; a classe `BaggageParaAtributos` em `tracing.js` copia cada item para os spans | `customer_id`, `order_id` e `correlation_id` em todos os spans filhos e em todas as linhas de log |
-| **Evento** | Um **momento** dentro de um span, com horário exato. É como um log preso ao span. | `span.addEvent('order.validation.passed')` | Jaeger, seção **Logs** dentro do span |
-| **Correlação de logs** | Toda linha de log carrega o `trace_id` e o `span_id` do span ativo. | `mixin()` do Pino em `app.js` | `docker logs`: copie o `trace_id` e cole na busca do Jaeger |
-
 Regra prática: **atributo** responde "como era esta operação?", **evento** responde "o que aconteceu durante ela, e quando?", **baggage** responde "que contexto as próximas etapas precisam conhecer?".
-
-### Hierarquia e timeline (Jaeger)
-
-1. Service `checkout-api`, Operation `POST /orders`, **Find Traces**.
-2. Abra um trace: são 5 spans. A timeline mostra que `save_to_database` é a etapa mais demorada.
-3. Clique em `process_order` → **Tags**: `payment_method`, `customer_tier` (atributos) e `customer_id`, `order_id`, `correlation_id` (vindos da baggage).
-4. Clique em `validate_order` → **Logs**: os eventos `order.validation.started` e `order.validation.passed`, com o horário de cada um.
-5. Clique em `save_to_database`: o atributo `tentativas` e, quando houve nova tentativa, o evento `database.insert.retry`.
-
-### Buscar por atributo
-
-No campo **Tags** da busca do Jaeger:
-
-| Busca | O que encontra |
-|-------|----------------|
-| `customer_tier=premium` | Pedidos de clientes premium |
-| `payment_method=pix` | Pedidos pagos com pix |
-| `tentativas=2` | Gravações que precisaram de uma segunda tentativa |
-| `error=true` | Pedidos inválidos (400) e falhas de banco (500) |
-
-### Um erro de ponta a ponta
-
-1. Busque `error=true` com Operation `POST /orders` e abra um trace com status 500.
-2. `save_to_database` aparece em vermelho, com três eventos `database.insert.retry` e um evento `exception` com a mensagem e a stack trace.
-3. O erro sobe pela hierarquia: `process_order` e `POST /orders` também ficam marcados.
-
-### Do log ao trace
-
-```bash
-sudo docker logs modulo-3-app-1 | grep '"level":"ERROR"' | tail -1
-```
-
-Copie o `trace_id` e cole na busca do Jaeger: abre o trace daquela requisição. O `span_id` indica em qual span o log foi escrito.
-
-O Jaeger não exibe os logs da aplicação, então o caminho é sempre log → `trace_id` → Jaeger. Os "Logs" que aparecem dentro de um span no Jaeger são os **eventos** do span.
-
-```json
-{"level":"INFO","timestamp":"2026-10-06T20:40:01.351Z","service":"checkout-api","trace_id":"b2d9f3f1172fe36f2a47271fe41007b2","span_id":"fd7964e987e9ccfd","customer_id":"CUST-293","order_id":"ORD-6d000d1b","correlation_id":"462ab034-59e6-4d81-b2e2-6e28905df7c3","message":"pedido validado"}
-```
 
 Métricas e sampling continuam como no Módulo 2: mesmas queries e mesmo `TRACE_SAMPLE_RATE`, agora no `.env` da pasta `modulo-3`.
 
