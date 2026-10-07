@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+
+# Um job por serviço: o rótulo "job" permite comparar os dois nas queries
+scrape_configs:
+  - job_name: checkout-api
+    static_configs:
+      - targets: ["api:3000"]
+
+  - job_name: payment-service
+    static_configs:
+      - targets: ["payment-service:3001"]

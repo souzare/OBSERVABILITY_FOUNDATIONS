@@ -7,6 +7,7 @@ Material de apoio e demos do curso **Observability Foundations**.
 | 1 — Conceitos | Infográficos: ruído vs sinal, MELT, consumidores de observabilidade | `observability-lab/modulo-1/assets/` (abra os `.html` no navegador) |
 | 2 — Pilares | Demo `checkout-api` com logs, métricas e traces, rodando na AWS | `observability-lab/modulo-2/` |
 | 3 — OpenTelemetry | A mesma API com auto-instrumentação, hierarquia de spans, baggage e eventos | `observability-lab/modulo-3/` ([instruções](#módulo-3-opentelemetry)) |
+| 4 — Service mapping | Dois serviços (`checkout-api` → `payment-service`) em um único trace, com mapa de serviços | `observability-lab/modulo-4/` ([instruções](#módulo-4-service-mapping)) |
 
 ---
 
@@ -438,3 +439,172 @@ Continuam como no Módulo 2: mesmas queries no Prometheus, mesmo `TRACE_SAMPLE_R
 | `load.js` | Gerador de tráfego |
 | `.env` | Variáveis (taxa de falha do banco, taxa de sampling) |
 | Demais arquivos | Iguais aos do Módulo 2 (Docker Compose, Prometheus, Grafana, scripts, template da AWS) |
+
+---
+
+# Módulo 4: Service mapping
+
+A `checkout-api` do Módulo 3 passa a chamar um segundo serviço, o `payment-service`, para cobrar o pedido. O foco é a **propagação de contexto**: os dois serviços escrevem spans no mesmo trace, e o Jaeger monta o mapa de serviços a partir disso.
+
+Material de apoio para projetar: `observability-lab/modulo-4/assets/infografico-opentelemetry.html` e `infografico-open-source.html`.
+
+## O que mudou em relação ao Módulo 3
+
+| | Módulo 3 | Módulo 4 |
+|---|----------|----------|
+| Serviços | 1 (`checkout-api`) | 2 (`checkout-api` e `payment-service`), cada um em sua pasta, com seu `Dockerfile` |
+| Etapas do pedido | validar, gravar, enviar e-mail | validar, gravar, **chamar o pagamento** |
+| Trace | 5 spans de um serviço | 7 spans de dois serviços |
+| Baggage | Entre spans do mesmo processo | Atravessa a rede no cabeçalho `baggage` |
+| Falhas | Retries na gravação | Timeout em 5% dos pagamentos, com 1 nova tentativa |
+| Prometheus | 1 alvo | 2 alvos; o rótulo `job` separa os serviços |
+
+Trace de um `POST /orders`:
+
+```
+checkout-api     POST /orders
+checkout-api     └─ process_order
+checkout-api        ├─ validate_order
+checkout-api        ├─ save_to_database
+checkout-api        └─ call_payment_service        injeta traceparent + baggage
+payment-service        └─ POST /process-payment    lê o traceparent e continua o trace
+payment-service           └─ process_payment       vermelho quando dá timeout
+```
+
+## Como o trace atravessa a rede
+
+1. Em `api/app.js`, dentro do span `call_payment_service`, a linha `propagation.inject(context.active(), headers)` grava dois cabeçalhos HTTP padrão W3C:
+
+```
+traceparent: 00-5739583a86180ffa37c64bcd03135b65-04514c4893c80e37-01
+             versão - trace_id - span_id de quem chamou - amostrado
+baggage:     customer_id=CUST-387,order_id=ORD-34b2424d,correlation_id=6aa000d0-...
+```
+
+2. No `payment-service`, a auto-instrumentação HTTP lê o `traceparent` e cria o span `POST /process-payment` como **filho** do span que chamou, em vez de começar um trace novo.
+3. A `baggage` chega junto: `customer_id`, `order_id` e `correlation_id` aparecem nos spans e nos logs do `payment-service` sem que ninguém os tenha passado como parâmetro.
+
+Se o cabeçalho não fosse enviado, cada serviço teria seu próprio trace e não haveria como ligar um ao outro.
+
+## Subir a demo
+
+### Opção A: na instância que já existe (recomendado)
+
+Depois de publicar o código no GitHub, no terminal da instância:
+
+```bash
+cd /opt/obsf && sudo git pull
+```
+
+Derrube o módulo que estiver no ar (troque `modulo-3` por `modulo-2` se for o caso):
+
+```bash
+cd /opt/obsf/observability-lab/modulo-3 && sudo docker compose down
+```
+
+```bash
+cd /opt/obsf/observability-lab/modulo-4 && sudo ./start.sh
+```
+
+Na primeira vez o `start.sh` constrói as imagens dos dois serviços, o que leva de 1 a 2 minutos. Os endereços e portas são os mesmos dos módulos anteriores.
+
+### Opção B: uma instância só para o Módulo 4
+
+```bash
+aws cloudformation deploy --stack-name obsf-modulo-4 --template-file observability-lab/modulo-4/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
+```
+
+```bash
+aws cloudformation describe-stacks --stack-name obsf-modulo-4 --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
+```
+
+Ao final: `aws cloudformation delete-stack --stack-name obsf-modulo-4`.
+
+### Opção C: local
+
+```bash
+cd observability-lab/modulo-4 && ./start.sh
+```
+
+## Gerar tráfego
+
+Dentro de `observability-lab/modulo-4`:
+
+```bash
+sudo docker compose run --rm load
+```
+
+É o mesmo gerador do Módulo 3. Com 5% de timeout no pagamento e uma nova tentativa automática, quase todos os pedidos terminam em 201; cerca de 1 a cada 400 termina em 502.
+
+## O que mostrar
+
+### 1. Mapa de serviços (Jaeger)
+
+1. No Jaeger, abra **System Architecture** (em versões mais antigas da interface, **Dependencies**).
+2. Aparecem duas caixas, `checkout-api` e `payment-service`, ligadas por uma seta com o número de chamadas.
+3. Ninguém desenhou esse mapa: ele é calculado a partir dos traces, olhando qual serviço é pai de qual.
+
+O mapa do Jaeger mostra apenas a contagem de chamadas. Taxa de requisições, erro e latência por serviço vêm do Prometheus (item 4).
+
+### 2. Um trace com os dois serviços
+
+1. Service `checkout-api`, Operation `POST /orders`, **Find Traces**.
+2. Abra um trace: 7 spans, com cores diferentes para cada serviço.
+3. Clique em `process_payment`: nas **Tags** estão `customer_id`, `order_id` e `correlation_id`, que vieram pela baggage.
+
+### 3. Um erro que atravessa os serviços
+
+1. Na busca, Service `payment-service` e **Tags** `error=true`.
+2. Abra um trace: o primeiro `process_payment` está em vermelho, com o evento `payment.gateway.timeout` e dura cerca de 1 segundo.
+3. Logo abaixo há um segundo `POST /process-payment`, bem-sucedido: é a nova tentativa. O span `call_payment_service` mostra `tentativas=2` e os eventos `payment.failed` e `payment.approved`.
+4. O cliente recebeu 201, mas esperou 1 segundo a mais. Sem o trace, isso seria só "uma requisição lenta".
+
+Para ver um pedido que falhou de vez, busque Service `checkout-api` com **Tags** `http.response.status_code=502`. Para que aconteça com mais frequência, aumente `PAYMENT_ERROR_RATE` no `.env` (por exemplo `0.3`) e rode `sudo ./atualizar.sh`.
+
+### 4. Números por serviço (Prometheus)
+
+```promql
+# Requisições por segundo, por serviço
+sum by (job) (rate(http_requests_total[1m]))
+```
+
+```promql
+# Taxa de erro (%) por serviço
+100 * sum by (job) (rate(http_requests_total{status=~"5.."}[1m])) / sum by (job) (rate(http_requests_total[1m]))
+```
+
+```promql
+# Latência p95 por serviço
+histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[1m])))
+```
+
+O `payment-service` mostra cerca de 5% de erro; a `checkout-api` mostra quase zero, porque a nova tentativa esconde a falha do cliente. A latência p95 da `checkout-api` é que denuncia o problema.
+
+### 5. O mesmo trace nos logs dos dois serviços
+
+Pegue um `trace_id` de um pagamento com falha:
+
+```bash
+sudo docker logs modulo-4-payment-service-1 | grep '"level":"ERROR"' | tail -1
+```
+
+Procure o mesmo `trace_id` nos logs da `checkout-api` (troque `TRACE_ID`):
+
+```bash
+sudo docker logs modulo-4-api-1 | grep TRACE_ID
+```
+
+As linhas dos dois serviços têm o mesmo `trace_id` e o mesmo `correlation_id`. O log `pagamento recebido` do `payment-service` mostra os cabeçalhos `traceparent` e `baggage` exatamente como chegaram.
+
+## Arquivos do módulo 4
+
+| Arquivo | Para que serve |
+|---------|----------------|
+| `api/app.js` | A `checkout-api`; a novidade é a função `chamarPagamento` |
+| `payment-service/app.js` | O serviço de pagamentos |
+| `api/tracing.js`, `payment-service/tracing.js` | Configuração do OpenTelemetry, igual nos dois; o nome do serviço vem da variável `SERVICE_NAME` |
+| `api/Dockerfile`, `payment-service/Dockerfile` | Imagem de cada serviço |
+| `docker-compose.yml` | Os dois serviços, Jaeger, Prometheus e Grafana |
+| `prometheus.yml` | Um job de scrape por serviço |
+| `.env` | Taxa de timeout do pagamento, sampling e endereços |
+| `start.sh`, `atualizar.sh` | Sobem e atualizam a demo (agora com `--build`) |

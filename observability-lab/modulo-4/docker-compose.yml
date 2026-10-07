@@ -1,0 +1,72 @@
+name: modulo-4
+
+services:
+  # ---------- Serviço 1: checkout-api (recebe os pedidos) ----------
+  api:
+    build: ./api
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: checkout-api
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - jaeger
+      - payment-service
+
+  # ---------- Serviço 2: payment-service (chamado pela checkout-api) ----------
+  # Só é acessado de dentro da rede do Compose, por isso não publica porta.
+  payment-service:
+    build: ./payment-service
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: payment-service
+      PORT: 3001
+    depends_on:
+      - jaeger
+
+  # ---------- TRACES: Jaeger (UI + coletor) ----------
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318"   # recebe traces (OTLP/HTTP)
+
+  # ---------- MÉTRICAS: Prometheus ----------
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  # ---------- Dashboards: Grafana ----------
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      - prometheus
+
+  # ---------- Gerador de tráfego (opcional, para quem não tem Node instalado) ----------
+  # Uso: docker compose run --rm load
+  load:
+    image: node:22-alpine
+    profiles: ["load"]
+    working_dir: /app
+    command: node load.js
+    init: true
+    environment:
+      BASE_URL: http://api:3000
+    volumes:
+      - ./load.js:/app/load.js:ro
+
