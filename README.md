@@ -8,6 +8,7 @@ Material de apoio e demos do curso **Observability Foundations**.
 | 2 — Pilares | Demo `checkout-api` com logs, métricas e traces, rodando na AWS | `observability-lab/modulo-2/` |
 | 3 — OpenTelemetry | A mesma API com auto-instrumentação, hierarquia de spans, baggage e eventos | `observability-lab/modulo-3/` ([instruções](#módulo-3-opentelemetry)) |
 | 4 — Service mapping | Dois serviços (`checkout-api` → `payment-service`) em um único trace, com mapa de serviços | `observability-lab/modulo-4/` ([instruções](#módulo-4-service-mapping)) |
+| 5 — DataOps e CIA Triad | Infográfico da tríade CIA e biblioteca de mascaramento de dados sensíveis | `observability-lab/modulo-5/` ([instruções](#módulo-5-dataops-e-cia-triad)) |
 
 ---
 
@@ -608,3 +609,93 @@ As linhas dos dois serviços têm o mesmo `trace_id` e o mesmo `correlation_id`.
 | `prometheus.yml` | Um job de scrape por serviço |
 | `.env` | Taxa de timeout do pagamento, sampling e endereços |
 | `start.sh`, `atualizar.sh` | Sobem e atualizam a demo (agora com `--build`) |
+
+---
+
+# Módulo 5: DataOps e CIA Triad
+
+Telemetria também é dado. Este módulo aplica a tríade CIA (confidencialidade, integridade e disponibilidade) aos logs, métricas e traces da `checkout-api`. Não há nada para subir na AWS: é um infográfico e um exemplo de código que roda em segundos.
+
+## CIA Triad na Observabilidade
+
+| Pilar | O que significa | Na observabilidade |
+|-------|-----------------|--------------------|
+| **Confidentiality** (Confidencialidade) | Dados não expostos sem autorização | Mascarar dados sensíveis antes de irem para logs e traces. Exemplo: e-mail vira `j***@*.com` |
+| **Integrity** (Integridade) | Dados não podem ser alterados | O `trace_id` é o mesmo do início ao fim da requisição, o `timestamp` é gravado na origem e não muda, e o hash do payload denuncia qualquer alteração |
+| **Availability** (Disponibilidade) | Dados sempre acessíveis quando necessário | Backup de métricas (Prometheus em alta disponibilidade) e persistência de traces (Jaeger com armazenamento em disco) |
+
+Infográfico interativo para projetar: abra `observability-lab/modulo-5/assets/cia-triad.html` no navegador e clique em cada círculo.
+
+Sobre disponibilidade, a demo dos módulos anteriores é um bom contraexemplo: há um único Prometheus e o Jaeger guarda os traces em memória, então reiniciar o container apaga tudo.
+
+## Data Masking na Prática
+
+A biblioteca `observability-lab/modulo-5/data-masking.js` não tem dependências e traz:
+
+| Função | Antes | Depois |
+|--------|-------|--------|
+| `maskEmail` | `john.doe@company.com` | `j***@*.com` |
+| `maskCreditCard` | `4532-1234-5678-9999` | `****-****-****-9999` |
+| `maskCustomerId` | `CUST-295` | `CUST-****` |
+| `maskPhone` | `+55 (11) 98765-1234` | `***-****-1234` |
+| `maskIPAddress` | `192.168.10.25` | `192.168.***.***` |
+| `pseudonymize` | `CUST-295` | `pseudo-165c596bcce9` (código estável por cliente) |
+| `maskSensitiveFields` | um objeto inteiro | cópia com todos os campos sensíveis conhecidos mascarados |
+
+### Rodar o exemplo
+
+```bash
+cd observability-lab/modulo-5
+```
+
+Com Node instalado:
+
+```bash
+node exemplo.js
+```
+
+Sem Node, pelo Docker:
+
+```bash
+docker run --rm -v "$PWD":/app -w /app node:22-alpine node exemplo.js
+```
+
+O exemplo mostra cada função isolada, o mesmo log antes e depois do mascaramento, a diferença entre mascarar e pseudonimizar, e o hash do payload (integridade).
+
+### Usar nos logs
+
+Campo a campo:
+
+```javascript
+const { maskEmail, maskCreditCard } = require('./data-masking');
+
+logger.info({
+  ...eventData,
+  customer_email: maskEmail(eventData.customer_email),
+  credit_card: maskCreditCard(eventData.credit_card),
+}, 'pedido recebido');
+```
+
+Ou de uma vez, sem depender de lembrar de cada campo:
+
+```javascript
+const { maskSensitiveFields } = require('./data-masking');
+
+logger.info(maskSensitiveFields(eventData), 'pedido recebido');
+```
+
+O mesmo vale para traces: mascare o valor antes de `span.setAttribute(...)` e antes de colocá-lo na baggage, que viaja em um cabeçalho HTTP para os outros serviços.
+
+### Pontos para discutir em aula
+
+- **Mascarar na origem.** Depois que o dado chega ao Jaeger ou ao agregador de logs, ele já foi copiado, indexado e talvez replicado.
+- **Mascarar ou pseudonimizar?** `maskCustomerId` transforma todos os clientes em `CUST-****`, e a correlação por cliente dos Módulos 3 e 4 deixa de funcionar. `pseudonymize` troca o valor por um código estável: ainda dá para seguir o mesmo cliente, sem saber quem ele é. O segredo usado precisa ficar fora do código.
+- **O melhor dado sensível é o que não foi coletado.** Antes de mascarar, vale perguntar se o campo precisa mesmo estar no log.
+
+## Arquivos do módulo 5
+
+| Arquivo | Para que serve |
+|---------|----------------|
+| `assets/cia-triad.html` | Infográfico interativo da tríade CIA |
+| `data-masking.js` | Funções de mascaramento e pseudonimização |
+| `exemplo.js` | Demonstração executável: antes e depois, e hash de integridade |

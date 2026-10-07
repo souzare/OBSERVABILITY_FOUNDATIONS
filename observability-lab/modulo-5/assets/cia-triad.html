@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tríade CIA na Observabilidade</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: #eceff1;
+    color: #263238;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .cartao {
+    width: 100%;
+    max-width: 1000px;
+    min-height: 600px;
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(38, 50, 56, .16);
+    display: flex;
+    flex-direction: column;
+  }
+  header { padding: 16px 24px; background: #263238; color: #fff; }
+  h1 { font-size: 23px; font-weight: 800; letter-spacing: -.3px; }
+  header p { font-size: 13px; color: #b0bec5; margin-top: 2px; }
+
+  .corpo { flex: 1; display: grid; grid-template-columns: 400px minmax(0, 1fr); }
+  .circulos { background: #f5f7f8; display: flex; align-items: center; justify-content: center; padding: 12px; }
+  svg { width: 100%; max-width: 380px; height: auto; font-family: inherit; }
+  .circulo { cursor: pointer; outline: none; }
+  .circulo circle { fill-opacity: .16; stroke-width: 3; transition: fill-opacity .2s, stroke-width .2s; }
+  .circulo:hover circle { fill-opacity: .28; }
+  .circulo[aria-pressed="true"] circle { fill-opacity: .82; stroke-width: 5; }
+  .circulo:focus-visible circle { stroke-dasharray: 6 4; stroke-width: 5; }
+  .circulo text { font-weight: 800; font-size: 17px; pointer-events: none; transition: fill .2s; }
+  .circulo .sub { font-weight: 600; font-size: 12px; }
+  .circulo[aria-pressed="true"] text { fill: #fff; }
+  .centro { font-size: 11px; font-weight: 700; fill: #263238; pointer-events: none; }
+
+  .painel { --cor: #1565c0; padding: 20px 24px; border-top: 6px solid var(--cor); transition: border-color .2s; }
+  .painel h2 { font-size: 24px; font-weight: 800; color: var(--cor); }
+  .painel h2 small { font-size: 14px; font-weight: 600; color: #546e7a; margin-left: 6px; }
+  .descricao { font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .contexto { font-size: 13.5px; color: #455a64; margin: 6px 0 12px; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #78909c; margin-bottom: 6px; }
+  ul { list-style: none; display: grid; gap: 7px; }
+  li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 12px; border-radius: 8px; background: #f5f7f8; animation: entra .3s both; }
+  li:nth-child(2) { animation-delay: .04s; } li:nth-child(3) { animation-delay: .08s; }
+  li:nth-child(4) { animation-delay: .12s; } li:nth-child(5) { animation-delay: .16s; }
+  @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+  .marca { width: 24px; height: 24px; border-radius: 50%; color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .ruim { background: #c62828; } .bom { background: #2e7d32; } .neutro { background: var(--cor); }
+  li.e-ruim { background: #ffebee; } li.e-bom { background: #e8f5e9; }
+  li b { display: block; font-size: 13.5px; }
+  li code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+  li span.obs { display: block; font-size: 12.5px; color: #546e7a; }
+  .como { margin-top: 12px; font-size: 13px; padding: 8px 12px; border-left: 4px solid var(--cor); background: #fafbfc; border-radius: 6px; }
+  .como code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+
+  @media (max-width: 800px) {
+    .corpo { grid-template-columns: minmax(0, 1fr); }
+    .circulos svg { max-width: 300px; }
+  }
+  @media (prefers-reduced-motion: reduce) { li { animation: none; } .circulo circle, .circulo text { transition: none; } }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <header>
+    <h1>Tríade CIA na Observabilidade</h1>
+    <p>Telemetria também é dado: precisa ser protegida, confiável e estar disponível. Clique em um círculo.</p>
+  </header>
+
+  <div class="corpo">
+    <div class="circulos">
+      <svg viewBox="0 0 380 370" role="group" aria-label="Os três pilares da tríade CIA">
+        <g class="circulo" data-pilar="c" role="button" tabindex="0" aria-pressed="true" aria-label="Confidencialidade">
+          <circle cx="190" cy="125" r="108" fill="#1565c0" stroke="#1565c0"/>
+          <text x="190" y="88" text-anchor="middle" fill="#1565c0">Confidentiality</text>
+          <text class="sub" x="190" y="107" text-anchor="middle" fill="#1565c0">Confidencialidade</text>
+        </g>
+        <g class="circulo" data-pilar="i" role="button" tabindex="0" aria-pressed="false" aria-label="Integridade">
+          <circle cx="120" cy="245" r="108" fill="#2e7d32" stroke="#2e7d32"/>
+          <text x="92" y="278" text-anchor="middle" fill="#2e7d32">Integrity</text>
+          <text class="sub" x="92" y="297" text-anchor="middle" fill="#2e7d32">Integridade</text>
+        </g>
+        <g class="circulo" data-pilar="a" role="button" tabindex="0" aria-pressed="false" aria-label="Disponibilidade">
+          <circle cx="260" cy="245" r="108" fill="#ef6c00" stroke="#ef6c00"/>
+          <text x="290" y="278" text-anchor="middle" fill="#e65100">Availability</text>
+          <text class="sub" x="290" y="297" text-anchor="middle" fill="#e65100">Disponibilidade</text>
+        </g>
+        <rect x="152" y="192" width="76" height="36" rx="10" fill="#fff" fill-opacity=".92" pointer-events="none"/>
+        <text class="centro" x="190" y="206" text-anchor="middle">telemetria</text>
+        <text class="centro" x="190" y="220" text-anchor="middle">confiável</text>
+      </svg>
+    </div>
+
+    <section class="painel" id="painel" aria-live="polite">
+      <h2 id="titulo"></h2>
+      <p class="descricao" id="descricao"></p>
+      <p class="contexto" id="contexto"></p>
+      <div class="rotulo">Exemplo na nossa aplicação</div>
+      <ul id="lista"></ul>
+      <p class="como" id="como"></p>
+    </section>
+  </div>
+</main>
+
+<script>
+  // tipo: 'ruim' (✕), 'bom' (✓) ou 'neutro' (•)
+  var PILARES = {
+    c: {
+      cor: '#1565c0', titulo: 'Confidentiality', pt: 'Confidencialidade',
+      descricao: 'Dados não expostos sem autorização.',
+      contexto: 'Logs e traces copiam dados da aplicação para outros sistemas, com outras pessoas e outras regras de acesso. O que não deveria ser lido não pode sair.',
+      itens: [
+        ['ruim', 'customer_email em logs', '"john@example.com"'],
+        ['bom', 'customer_email mascarado', '"j***@*.com"'],
+        ['ruim', 'credit_card em traces', '"4532-1234-5678-9999"'],
+        ['bom', 'credit_card mascarado', '"****-****-****-9999"']
+      ],
+      como: '<b>Como:</b> mascarar na aplicação, antes do log e do span. Veja <code>data-masking.js</code> e rode <code>node exemplo.js</code>.'
+    },
+    i: {
+      cor: '#2e7d32', titulo: 'Integrity', pt: 'Integridade',
+      descricao: 'Dados não podem ser alterados.',
+      contexto: 'Uma investigação só vale se a telemetria for fiel ao que aconteceu: nada adulterado, nada trocado no caminho.',
+      itens: [
+        ['neutro', 'trace_id sempre igual', '"4bf92f3577b34da6a3ce929d0e0e4736"', 'O mesmo do primeiro ao último span, nos dois serviços.'],
+        ['neutro', 'timestamp imutável', '"2026-10-03T15:30:00Z"', 'Gravado na origem, no momento do evento; ninguém reescreve depois.'],
+        ['bom', 'hash do payload: pedido igual, hash igual', '670b220eb004e5f4'],
+        ['ruim', 'amount alterado de 250 para 2.5: hash diferente', '477580d9e8c43631', 'A alteração fica evidente.']
+      ],
+      como: '<b>Como:</b> gerar o hash junto com o evento e conferir na leitura. O <code>exemplo.js</code> mostra os dois hashes acima.'
+    },
+    a: {
+      cor: '#ef6c00', titulo: 'Availability', pt: 'Disponibilidade',
+      descricao: 'Dados sempre acessíveis.',
+      contexto: 'A observabilidade é mais necessária justamente durante um incidente. Se ela cair junto com a aplicação, ficamos no escuro.',
+      itens: [
+        ['ruim', 'Hoje na demo: 1 Prometheus, Jaeger em memória', '', 'Reiniciou o container, perdeu métricas e traces.'],
+        ['bom', 'Prometheus com backup: 2 instâncias', '', 'Se uma cair, a outra continua coletando.'],
+        ['bom', 'Jaeger com persistência (volumes)', '', 'Os traces sobrevivem a um reinício.'],
+        ['bom', 'Dashboard do Grafana sempre disponível', '', 'Configuração guardada como código, fácil de recriar.']
+      ],
+      como: '<b>Como:</b> tratar a pilha de observabilidade como um sistema de produção, com redundância, retenção definida e monitoramento próprio.'
+    }
+  };
+  var SIMBOLO = { ruim: '✕', bom: '✓', neutro: '•' };
+
+  var circulos = document.querySelectorAll('.circulo');
+  var painel = document.getElementById('painel');
+
+  function mostrar(chave) {
+    var p = PILARES[chave];
+    circulos.forEach(function (c) { c.setAttribute('aria-pressed', c.dataset.pilar === chave); });
+    painel.style.setProperty('--cor', p.cor);
+    document.getElementById('titulo').innerHTML = p.titulo + '<small>' + p.pt + '</small>';
+    document.getElementById('descricao').textContent = p.descricao;
+    document.getElementById('contexto').textContent = p.contexto;
+    document.getElementById('lista').innerHTML = p.itens.map(function (i) {
+      return '<li class="e-' + i[0] + '"><span class="marca ' + i[0] + '">' + SIMBOLO[i[0]] + '</span><div><b>' + i[1] + '</b>' +
+        (i[2] ? '<code>' + i[2] + '</code>' : '') + (i[3] ? '<span class="obs">' + i[3] + '</span>' : '') + '</div></li>';
+    }).join('');
+    document.getElementById('como').innerHTML = p.como;
+  }
+
+  circulos.forEach(function (c) {
+    c.addEventListener('click', function () { mostrar(c.dataset.pilar); });
+    c.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mostrar(c.dataset.pilar); }
+    });
+  });
+  mostrar('c');
+</script>
+</body>
+</html>
