@@ -1,0 +1,10 @@
+{
+  "name": "webhook-dummy",
+  "version": "1.0.0",
+  "description": "Recebe os alertas do Alertmanager e imprime no console",
+  "main": "webhook.js",
+  "private": true,
+  "dependencies": {
+    "express": "5.2.1"
+  }
+}

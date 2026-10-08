@@ -35,6 +35,7 @@ Resources:
         - { IpProtocol: tcp, FromPort: 3001, ToPort: 3001, CidrIp: !Ref AllowedCidr, Description: Grafana }
         - { IpProtocol: tcp, FromPort: 9090, ToPort: 9090, CidrIp: !Ref AllowedCidr, Description: Prometheus }
         - { IpProtocol: tcp, FromPort: 16686, ToPort: 16686, CidrIp: !Ref AllowedCidr, Description: Jaeger UI }
+        - { IpProtocol: tcp, FromPort: 9093, ToPort: 9093, CidrIp: !Ref AllowedCidr, Description: Alertmanager (modulo 6) }
 
   DemoRole:
     Type: AWS::IAM::Role
@@ -95,6 +96,9 @@ Outputs:
     Value: !Sub http://${DemoInstance.PublicDnsName}:9090
   GrafanaUrl:
     Value: !Sub http://${DemoInstance.PublicDnsName}:3001
+  AlertmanagerUrl:
+    Description: Disponivel apenas com o modulo 6 no ar
+    Value: !Sub http://${DemoInstance.PublicDnsName}:9093
   InstanceId:
     Value: !Ref DemoInstance
   TerminalUrl:

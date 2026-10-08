@@ -1,0 +1,68 @@
+groups:
+  # ---------- Valores calculados uma vez e reutilizados nos alertas e no Grafana ----------
+  - name: calculos
+    rules:
+      # Latência p95 por serviço, no último minuto
+      - record: job:latencia_p95:1m
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[1m])))
+
+      # Fração de respostas 5xx por serviço, no último minuto (0.05 = 5%)
+      - record: job:taxa_de_erro:1m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[1m]))
+            / sum by (job) (rate(http_requests_total[1m]))
+
+  # ---------- Alertas com limite fixo ("threshold burro") ----------
+  - name: limites-fixos
+    rules:
+      # Alerta 1: latência acima de 1 s por 5 avaliações seguidas (5 x 5 s = 25 s)
+      - alert: LatenciaAlta
+        expr: job:latencia_p95:1m{job="checkout-api"} > 1
+        for: 25s
+        labels:
+          severity: warning
+          tipo: limite-fixo
+        annotations:
+          summary: "Latência p95 da checkout-api acima de 1 s"
+          description: "p95 em {{ $value | humanizeDuration }} (limite: 1 s)"
+
+      # Alerta 2: mais de 10% dos pagamentos falhando
+      - alert: PagamentoComErros
+        expr: job:taxa_de_erro:1m{job="payment-service"} > 0.10
+        for: 20s
+        labels:
+          severity: critical
+          tipo: limite-fixo
+        annotations:
+          summary: "Taxa de erro do payment-service acima de 10%"
+          description: "{{ $value | humanizePercentage }} dos pagamentos falhando (limite: 10%)"
+
+      # Alerta 3: fila de pedidos pendentes crescendo
+      - alert: PedidosPendentesAcumulando
+        expr: orders_pending > 100
+        for: 10s
+        labels:
+          severity: warning
+          tipo: limite-fixo
+        annotations:
+          summary: "Mais de 100 pedidos pendentes"
+          description: "{{ $value }} pedidos aguardando confirmação (limite: 100)"
+
+  # ---------- Alerta "inteligente": compara com o comportamento recente ----------
+  - name: baseline
+    rules:
+      # Dispara quando a latência atual foge do padrão: média dos 5 minutos
+      # anteriores + 3 desvios padrão. Não há número fixo: o limite se ajusta
+      # sozinho ao que é normal para o serviço.
+      - alert: LatenciaForaDoPadrao
+        expr: |
+          job:latencia_p95:1m{job="checkout-api"}
+            > avg_over_time(job:latencia_p95:1m{job="checkout-api"}[5m] offset 2m)
+              + 3 * stddev_over_time(job:latencia_p95:1m{job="checkout-api"}[5m] offset 2m)
+        for: 25s
+        labels:
+          severity: info
+          tipo: baseline
+        annotations:
+          summary: "Latência da checkout-api fora do padrão recente"
+          description: "p95 em {{ $value | humanizeDuration }}, acima da média recente + 3 desvios padrão"

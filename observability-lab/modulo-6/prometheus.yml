@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s   # de quanto em quanto tempo as regras de alerta são avaliadas
+
+# As regras de alerta ficam em um arquivo separado
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# Para onde o Prometheus envia os alertas que dispararam
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# Um job por serviço: o rótulo "job" permite comparar os dois nas queries
+scrape_configs:
+  - job_name: checkout-api
+    static_configs:
+      - targets: ["api:3000"]
+
+  - job_name: payment-service
+    static_configs:
+      - targets: ["payment-service:3001"]

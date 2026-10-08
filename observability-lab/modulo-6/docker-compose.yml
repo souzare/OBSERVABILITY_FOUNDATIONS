@@ -1,0 +1,103 @@
+name: modulo-6
+
+services:
+  # ---------- Serviço 1: checkout-api (recebe os pedidos) ----------
+  api:
+    build: ./api
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: checkout-api
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - jaeger
+      - payment-service
+
+  # ---------- Serviço 2: payment-service (chamado pela checkout-api) ----------
+  payment-service:
+    build: ./payment-service
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: payment-service
+      PORT: 3001
+    ports:
+      - "3002:3001" # só para o load.js alcançar o /chaos quando roda fora do Docker
+    depends_on:
+      - jaeger
+
+  # ---------- TRACES: Jaeger (UI + coletor) ----------
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318"   # recebe traces (OTLP/HTTP)
+
+  # ---------- MÉTRICAS: Prometheus ----------
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    depends_on:
+      - alertmanager
+
+  # ---------- ALERTAS: Alertmanager (agrupa e entrega os alertas) ----------
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    depends_on:
+      - webhook
+
+  # ---------- Destino dos alertas: webhook de mentira que só imprime ----------
+  webhook:
+    build: ./webhook
+    init: true
+    ports:
+      - "5001:5001"
+
+  # ---------- Dashboards: Grafana ----------
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      # Os alunos veem o dashboard sem login; para editar, entre com admin/admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/modulo-6.json
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # ---------- Gerador de tráfego e de anomalias ----------
+  # Uso: docker compose run --rm load                  (normal)
+  #      docker compose run --rm load --mode anomaly   (lentidão no pagamento aos 2 min)
+  load:
+    image: node:22-alpine
+    profiles: ["load"]
+    working_dir: /app
+    entrypoint: ["node", "load.js"]
+    init: true
+    environment:
+      BASE_URL: http://api:3000
+      PAYMENT_ADMIN_URL: http://payment-service:3001
+      ANOMALY_START_S: ${ANOMALY_START_S:-120}
+      ANOMALY_END_S: ${ANOMALY_END_S:-240}
+    volumes:
+      - ./load.js:/app/load.js:ro
+
