@@ -1,0 +1,3 @@
+node_modules/
+# Chaves do Datadog e do Gremlin: NUNCA vão para o GitHub
+segredos.env

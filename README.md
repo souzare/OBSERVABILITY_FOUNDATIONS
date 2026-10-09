@@ -10,12 +10,13 @@ Material de apoio e demos do curso **Observability Foundations**. Todas as demos
 | 4 — Service mapping | Dois serviços em um único trace; mapa de serviços | Demo na AWS |
 | 5 — DataOps e CIA Triad | Infográfico da tríade CIA e mascaramento de dados | Abrir o `.html` e rodar um script |
 | 6 — Anomalias e alertas | Injeção de anomalia, regras de alerta, Alertmanager e dashboard no Grafana | Demo na AWS |
+| 7 — Datadog e Gremlin | A mesma aplicação enviando logs, métricas e traces ao Datadog; SLOs, anomalias e testes de resiliência | Demo na AWS + contas de avaliação |
 
 ---
 
 # Passo a passo: visão única
 
-Um único ambiente na AWS serve os módulos 2, 3, 4 e 6. Você o cria uma vez, troca de módulo com um comando e apaga tudo no final.
+Um único ambiente na AWS serve os módulos 2, 3, 4, 6 e 7. Você o cria uma vez, troca de módulo com um comando e apaga tudo no final.
 
 | # | Passo | Quando | Onde | Comando ou ação |
 |---|-------|--------|------|-----------------|
@@ -28,9 +29,10 @@ Um único ambiente na AWS serve os módulos 2, 3, 4 e 6. Você o cria uma vez, t
 | 7 | [Módulo 4](#7-módulo-4-service-mapping) | Na aula | Terminal da instância | `trocar-modulo.sh 4`, gerar tráfego, mostrar |
 | 8 | [Módulo 5](#8-módulo-5-dataops-e-cia-triad) | Na aula | Navegador e seu computador | Abrir o infográfico, `node exemplo.js` |
 | 9 | [Módulo 6](#9-módulo-6-anomalias-e-alertas) | Na aula | Terminal da instância | `trocar-modulo.sh 6`, gerar tráfego com anomalia, mostrar |
-| 10 | [Apagar tudo](#10-apagar-tudo) | Ao final | Seu computador | `aws cloudformation delete-stack ...` |
+| 10 | [Módulo 7](#10-módulo-7-datadog-e-gremlin) | Configurar antes; demonstrar na aula | Datadog, Gremlin e terminal da instância | Chaves em `segredos.env`, `trocar-modulo.sh 7`, monitores, SLOs, experimento |
+| 11 | [Apagar tudo](#11-apagar-tudo) | Ao final | Seu computador | `aws cloudformation delete-stack ...` |
 
-Os passos 5, 6, 7 e 9 seguem sempre a mesma [rotina de demo](#rotina-de-cada-demo): colocar o módulo no ar, gerar tráfego e abrir as ferramentas.
+Os passos 5, 6, 7, 9 e 10 seguem sempre a mesma [rotina de demo](#rotina-de-cada-demo): colocar o módulo no ar, gerar tráfego e abrir as ferramentas.
 
 ---
 
@@ -67,7 +69,7 @@ Na raiz do repositório:
 aws cloudformation deploy --stack-name obsf-modulo-2 --template-file observability-lab/modulo-2/aws/cloudformation.yaml --capabilities CAPABILITY_IAM --parameter-overrides AllowedCidr=0.0.0.0/0
 ```
 
-Leva cerca de 2 minutos e usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`). A stack se chama `obsf-modulo-2` por ter nascido nesse módulo, mas atende os módulos 2, 3, 4 e 6.
+Leva cerca de 2 minutos e usa a região padrão do seu AWS CLI (para outra, acrescente `--region sa-east-1`). A stack se chama `obsf-modulo-2` por ter nascido nesse módulo, mas atende os módulos 2, 3, 4, 6 e 7.
 
 O que é criado:
 
@@ -111,7 +113,7 @@ aws cloudformation describe-stacks --stack-name obsf-modulo-2 --query "Stacks[0]
 | `AlertmanagerUrl` | Alertmanager (só responde com o Módulo 6 no ar) |
 | `TerminalUrl` | Terminal da instância no navegador |
 
-Os endereços são os mesmos para os módulos 2, 3, 4 e 6. Depois que a stack fica pronta, a instância ainda leva **de 3 a 4 minutos** para instalar o Docker e subir a demo. Está pronta quando `AppUrl` + `/metrics` responder no navegador.
+Os endereços são os mesmos para os módulos 2, 3, 4 e 6 (o Módulo 7 usa só o `AppUrl`; o resto se vê no Datadog). Depois que a stack fica pronta, a instância ainda leva **de 3 a 4 minutos** para instalar o Docker e subir a demo. Está pronta quando `AppUrl` + `/metrics` responder no navegador.
 
 ---
 
@@ -121,7 +123,7 @@ Tudo aqui é feito no terminal da instância: abra o `TerminalUrl` no navegador 
 
 ## A. Colocar o módulo no ar
 
-Troque o número no final pelo módulo desejado (`2`, `3`, `4` ou `6`):
+Troque o número no final pelo módulo desejado (`2`, `3`, `4`, `6` ou `7`):
 
 ```bash
 cd /opt/obsf && sudo git pull && sudo observability-lab/trocar-modulo.sh 3
@@ -155,6 +157,7 @@ Em uma segunda aba do terminal, troque o nome do container conforme o módulo:
 | 3 | `modulo-3-app-1` |
 | 4 | `modulo-4-api-1` e `modulo-4-payment-service-1` |
 | 6 | `modulo-6-api-1`, `modulo-6-payment-service-1` e `modulo-6-webhook-1` |
+| 7 | `modulo-7-api-1`, `modulo-7-payment-service-1` e `modulo-7-datadog-agent-1` |
 
 ```bash
 sudo docker logs -f modulo-3-app-1
@@ -1182,11 +1185,418 @@ curl -s -X POST localhost:3002/chaos -H "Content-Type: application/json" -d '{}'
 
 Três ideias para os alunos levarem: um alerta é uma **regra avaliada sobre métricas**, não mágica; **limite fixo é fácil de escrever e difícil de acertar**; e o alerta diz **que** há um problema, enquanto traces e logs dizem **onde** e **por quê**.
 
+## 10. Módulo 7: Datadog e Gremlin
+
+A mesma aplicação do Módulo 6, agora enviando tudo para o Datadog. Jaeger, Prometheus, Grafana e Alertmanager saem; no lugar entra um único container, o Datadog Agent. Por fim, o Gremlin provoca falhas de verdade e usa um monitor do Datadog como freio de segurança.
+
+| O que você quer mostrar | Onde no Datadog | Passo da demo |
+|-------------------------|-----------------|---------------|
+| Traces | APM → Traces | B.1 |
+| Logs | Logs → Explorer | B.2 |
+| Métricas | Metrics → Explorer | B.3 |
+| Service mapping | APM → Service Map | B.4 |
+| SLIs e SLOs | Service Mgmt → SLOs | B.5 |
+| Alertas e anomalias (AIOps) | Monitors e Watchdog | B.6 |
+| Teste de resiliência | Gremlin, com Health Check no monitor do Datadog | B.7 |
+
+> **Estado deste módulo:** os arquivos foram escritos e o Docker Compose foi validado, mas o módulo **não foi executado** contra uma conta do Datadog nem do Gremlin. Os nomes de métricas e os caminhos de menu abaixo seguem a documentação; o passo A.5 mostra como conferir os nomes reais antes de criar monitores. Faça um ensaio completo antes da aula.
+
+### Custos: como manter perto de zero
+
+| Item | Quanto custa | Como economizar |
+|------|--------------|-----------------|
+| EC2 | A mesma `t3.small` dos outros módulos (cerca de US$ 0,03/h). Ela não é elegível ao free tier; a `t3.micro`, que é, tem 1 GB de memória e não comporta o Agent mais os builds. | Apague a stack ao final (passo 11). |
+| Datadog | Avaliação gratuita de 14 dias, com todos os recursos. O plano gratuito permanente não cobre o que esta demo usa (APM, logs e métricas customizadas), então a demo depende do período de avaliação. | Crie a conta poucos dias antes da aula, direto no site e sem cadastrar cartão. |
+| Gremlin | Avaliação gratuita (confira o prazo atual no site; fontes indicam 30 dias, sem cartão). | Mesma ideia: crie perto da data. |
+
+O `docker-compose.yml` já vem ajustado para gastar pouco:
+
+- **Um host só.** APM e infraestrutura são cobrados por host.
+- **Logs só dos dois serviços.** `DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL` está em `false`; log é cobrado por volume.
+- **Só as métricas usadas.** A etiqueta `ad.checks` lista `http_request.*`, `orders_pending` e `traces.*`; cada métrica customizada conta.
+- **Nada de recursos pagos à parte.** A demo usa Watchdog e monitores de anomalia, incluídos nos produtos básicos; não usa Bits AI nem outros complementos.
+
+Dois cuidados que dependem de você: **gere tráfego só quando precisar** (o gerador produz cerca de 60 linhas de log por segundo) e, ao terminar, **derrube o módulo e revogue a API key** (passo B.8), para nada continuar enviando dados depois da avaliação.
+
+## Parte A: Configuração (antes da aula)
+
+Reserve cerca de 1 hora, de preferência na véspera, para dar tempo de acumular histórico (passo A.9).
+
+### A.1 Criar a conta no Datadog
+
+1. Crie uma conta de avaliação em datadoghq.com. Na criação você escolhe a região; anote o **site** que aparece no endereço depois do login (`app.datadoghq.com` → `datadoghq.com`; `us5.datadoghq.com` → `us5.datadoghq.com`; `app.datadoghq.eu` → `datadoghq.eu`).
+2. O assistente inicial oferece instalar um Agent: pode pular, o Agent vem no nosso Docker Compose.
+
+### A.2 Criar as chaves
+
+No Datadog, em **Organization Settings**:
+
+| Chave | Onde | Para quê |
+|-------|------|----------|
+| **API key** | API Keys → New Key | O Agent usa para enviar dados |
+| **Application key** | Application Keys → New Key | Só o Gremlin usa, para ler o estado dos monitores (passo A.8) |
+
+### A.3 Colocar as chaves na instância
+
+As chaves ficam em um arquivo que **não vai para o GitHub** (o repositório é público). Publique o código (passo 1) e, no terminal da instância:
+
+```bash
+cd /opt/obsf && sudo git pull && cd observability-lab/modulo-7 && sudo cp segredos.env.exemplo segredos.env
+```
+
+```bash
+sudo nano segredos.env
+```
+
+Preencha `DD_API_KEY` e `DD_SITE`. Deixe as linhas do Gremlin vazias por enquanto. Salve com `Ctrl+O`, `Enter`, `Ctrl+X`.
+
+### A.4 Subir o Módulo 7
+
+```bash
+cd /opt/obsf && sudo observability-lab/trocar-modulo.sh 7
+```
+
+Confira se o Agent está saudável e falando com o Datadog:
+
+```bash
+sudo docker exec modulo-7-datadog-agent-1 agent status | grep -A3 "API Keys status"
+```
+
+Deve aparecer `API Key ending with ...: API Key valid`. Se aparecer inválida, revise `DD_API_KEY` e `DD_SITE` e rode o `trocar-modulo.sh 7` de novo.
+
+### A.5 Gerar tráfego e conferir a chegada dos dados
+
+```bash
+cd /opt/obsf/observability-lab/modulo-7 && sudo docker compose run --rm load
+```
+
+Em 2 a 3 minutos, no Datadog (filtre sempre por `env:obsf-lab`):
+
+| Sinal | Onde olhar | O que deve aparecer |
+|-------|-----------|---------------------|
+| Traces | **APM → Services** | `checkout-api` e `payment-service` |
+| Logs | **Logs → Explorer**, busca `env:obsf-lab` | Linhas JSON dos dois serviços |
+| Métricas | **Metrics → Summary**, busca `obsf.` | As métricas da aplicação |
+
+**Anote os nomes exatos das métricas.** Os passos seguintes assumem estes, que são os esperados pela conversão do formato Prometheus:
+
+| No Prometheus | No Datadog (esperado) |
+|---------------|------------------------|
+| `http_requests_total` | `obsf.http_requests.count` |
+| `http_request_duration_seconds_sum` | `obsf.http_request_duration_seconds.sum` |
+| `http_request_duration_seconds_count` | `obsf.http_request_duration_seconds.count` |
+| `orders_pending` | `obsf.orders_pending` |
+
+Se algum nome for diferente no **Metrics Summary**, use o que aparecer lá. Para ver direto no Agent:
+
+```bash
+sudo docker exec modulo-7-datadog-agent-1 agent check openmetrics | grep -o '"metric": "[^"]*"' | sort -u
+```
+
+Se algo não chegar:
+
+| Falta | Verifique |
+|-------|-----------|
+| Traces | `sudo docker exec modulo-7-datadog-agent-1 agent status` → seções **OTLP** e **APM Agent** |
+| Logs | Mesma saída, seção **Logs Agent** |
+| Métricas | Mesma saída, seção **openmetrics** em **Running Checks** |
+
+### A.6 Criar os monitores
+
+Em **Monitors → New Monitor → Metric**. Crie os três; inclua a tag `env:obsf-lab` em cada um.
+
+**Monitor 1: latência alta (limite fixo)**
+
+| Campo | Valor |
+|-------|-------|
+| Detection method | Threshold Alert |
+| Query `a` | `sum:obsf.http_request_duration_seconds.sum{service:checkout-api}.as_count()` |
+| Query `b` | `sum:obsf.http_request_duration_seconds.count{service:checkout-api}.as_count()` |
+| Formula | `a / b` (latência média em segundos) |
+| Evaluate | sobre os últimos 2 minutos |
+| Alert threshold | acima de `1` |
+| Nome | `[obsf] Latência da checkout-api alta` |
+
+**Monitor 2: latência fora do padrão (anomalia)**
+
+| Campo | Valor |
+|-------|-------|
+| Detection method | Anomaly Detection |
+| Queries e fórmula | As mesmas do Monitor 1 |
+| Algoritmo | **Basic** (o único que funciona com pouco histórico) |
+| Desvios (bounds) | `3` |
+| Direção | acima dos limites (`above`) |
+| Nome | `[obsf] Latência da checkout-api fora do padrão` |
+
+**Monitor 3: erros no pagamento**
+
+| Campo | Valor |
+|-------|-------|
+| Detection method | Threshold Alert |
+| Query `a` | `sum:obsf.http_requests.count{service:payment-service,status:503}.as_count()` |
+| Query `b` | `sum:obsf.http_requests.count{service:payment-service}.as_count()` |
+| Formula | `a / b * 100` |
+| Alert threshold | acima de `10` |
+| Nome | `[obsf] Erros no payment-service` |
+
+São os mesmos três alertas do Módulo 6, agora no Datadog. Copie o endereço do Monitor 1 no navegador: o Gremlin vai precisar dele (passo A.8).
+
+### A.7 Criar os SLOs
+
+Em **Service Mgmt → SLOs → New SLO**.
+
+**SLO 1: disponibilidade da `checkout-api` (por métrica)**
+
+| Campo | Valor |
+|-------|-------|
+| Tipo | Metric Based |
+| Good events (numerador) | `sum:obsf.http_requests.count{service:checkout-api,!status:500,!status:502}.as_count()` |
+| Total events (denominador) | `sum:obsf.http_requests.count{service:checkout-api}.as_count()` |
+| Target | `99%` em 7 dias |
+| Nome | `[obsf] Disponibilidade da checkout-api` |
+
+O **SLI** é a fração de requisições sem erro do servidor; o **SLO** é a meta de 99%; o **error budget** é o 1% restante. Respostas 400 contam como boas: são erro do cliente, não do serviço.
+
+**SLO 2: latência da `checkout-api` (por monitor)**
+
+| Campo | Valor |
+|-------|-------|
+| Tipo | Monitor Based |
+| Monitor | `[obsf] Latência da checkout-api alta` |
+| Target | `99%` em 7 dias |
+| Nome | `[obsf] Latência da checkout-api` |
+
+Aqui o SLI é a fração do tempo em que o monitor ficou fora de alerta.
+
+Opcional: no SLO 1, em **Set up Alerts**, crie um alerta de **Burn Rate**. É o conceito apresentado no passo 9.5.
+
+### A.8 Configurar o Gremlin
+
+1. Crie uma conta de avaliação em gremlin.com.
+2. Em **Team Settings → Configuration**, copie o **Team ID** e o **Secret Key** (se o segredo não estiver visível, use **Reset**).
+3. Na instância, acrescente os dois valores ao `segredos.env`:
+
+```bash
+cd /opt/obsf/observability-lab/modulo-7 && sudo nano segredos.env
+```
+
+4. Suba o agente do Gremlin:
+
+```bash
+sudo docker compose --profile gremlin up -d gremlin
+```
+
+5. No Gremlin, em **Agents** (ou **Hosts**), o host `obsf-demo` deve aparecer como ativo, e os containers da demo devem estar listados como alvos.
+6. Crie o Health Check: **Health Checks → + Health Check → Datadog**. Escolha o site da sua conta, informe a **API key** e a **Application key** (passo A.2), salve a autenticação e selecione o monitor `[obsf] Latência da checkout-api alta` (pelo nome ou colando o endereço do monitor).
+7. Crie o cenário: **Scenarios → New Scenario**.
+
+| Campo | Valor |
+|-------|-------|
+| Nome | `Lentidão no pagamento` |
+| Health Check | o do item 6 |
+| Alvo | Containers → o container do `payment-service` (rótulo `com.docker.compose.service=payment-service`) |
+| Experimento | Network → **Latency**, `2000` ms, duração `300` s |
+
+O agente do Gremlin roda com permissões amplas sobre o host e o Docker, porque precisa mexer em rede e processos de outros containers. Use-o só nesta instância de demo.
+
+Se o agente não aparecer no Gremlin, veja `sudo docker logs modulo-7-gremlin-1` e compare as opções do serviço `gremlin` no `docker-compose.yml` com o comando `docker run` da documentação atual do Gremlin.
+
+### A.9 Deixar o ambiente "aquecer"
+
+Detecção de anomalia precisa de passado para comparar:
+
+| Recurso | Histórico necessário |
+|---------|----------------------|
+| Monitor de anomalia com algoritmo Basic | Alguns minutos a poucas horas de tráfego normal |
+| Algoritmos Agile e Robust | Cerca de 3 vezes o ciclo sazonal (3 horas para ciclo de 1 hora; semanas para ciclo semanal) |
+| Watchdog | Dias a semanas; em conta nova pode não mostrar nada |
+
+Deixe o gerador rodando em modo normal por pelo menos 1 hora antes de ensaiar o passo B.6, e de novo antes da aula. Trate o Watchdog como bônus: se houver achados, mostre; se não, explique por quê.
+
+### A.10 Ensaio
+
+Rode a Parte B inteira uma vez. Depois, pare o tráfego e derrube o módulo até a aula:
+
+```bash
+cd /opt/obsf && sudo observability-lab/trocar-modulo.sh parar
+```
+
+## Parte B: Demonstração (na aula)
+
+### B.0 Preparar (15 minutos antes)
+
+```bash
+cd /opt/obsf && sudo observability-lab/trocar-modulo.sh 7
+```
+
+```bash
+cd /opt/obsf/observability-lab/modulo-7 && sudo docker compose --profile gremlin up -d gremlin
+```
+
+```bash
+sudo docker compose run --rm load
+```
+
+Deixe o tráfego normal rodando. Abra o Datadog com o filtro `env:obsf-lab`.
+
+### B.1 Traces: o código não mudou
+
+**O que dizer:** no Módulo 4 falamos que, com OpenTelemetry, o destino vira configuração. Aqui está a prova: os traces saíram do Jaeger e foram para o Datadog sem tocar em `tracing.js`.
+
+**No código:** `modulo-7/.env`, uma linha:
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=http://datadog-agent:4318
+```
+
+E, em `modulo-7/docker-compose.yml`, o Agent aceitando o mesmo protocolo:
+
+```yaml
+DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
+```
+
+**Na demo:**
+
+1. **APM → Traces**, filtro `service:checkout-api`.
+2. Abra um trace de `POST /orders`: a mesma hierarquia dos Módulos 3 e 4, com os spans do `payment-service` no mesmo trace.
+3. Clique em `process_order`: `payment_method`, `customer_tier` e os itens da baggage aparecem como tags do span.
+
+### B.2 Logs ligados ao trace
+
+**O que dizer:** os logs continuam saindo no stdout. O Agent lê o stdout dos containers e envia. Para o Datadog ligar o log ao trace, precisamos de quatro linhas a mais no logger.
+
+**No código:** `modulo-7/api/app.js`, dentro do `mixin()` do Pino (a única mudança de código do módulo):
+
+```javascript
+dd: {
+  trace_id: BigInt(`0x${traceId.slice(16)}`).toString(),
+  span_id: BigInt(`0x${spanId}`).toString(),
+},
+```
+
+E as etiquetas no `docker-compose.yml` que dizem ao Agent de quem é cada log:
+
+```yaml
+com.datadoghq.tags.service: checkout-api
+com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "checkout-api"}]'
+```
+
+**Na demo:**
+
+1. **Logs → Explorer**, busca `env:obsf-lab service:checkout-api`.
+2. Abra uma linha: os campos do JSON (`customer_id`, `order_id`, `correlation_id`) viraram atributos pesquisáveis.
+3. No painel do log, abra a aba **Trace**: o Datadog mostra o trace daquela requisição. No sentido inverso, dentro de um trace no APM, a aba **Logs** lista as linhas daquele trace.
+4. Compare com os módulos anteriores, em que o caminho era copiar o `trace_id` do terminal e colar no Jaeger.
+
+### B.3 Métricas
+
+**O que dizer:** a aplicação continua expondo `/metrics` no formato Prometheus. O Agent faz o papel do Prometheus e coleta.
+
+**No código** (`modulo-7/docker-compose.yml`, etiqueta de cada serviço):
+
+```yaml
+com.datadoghq.ad.checks: '{"openmetrics": {"instances": [{"openmetrics_endpoint": "http://%%host%%:3000/metrics", "namespace": "obsf", "metrics": ["http_request.*", "orders_pending", "traces.*"]}]}}'
+```
+
+**Na demo:**
+
+1. **Metrics → Explorer**, métrica `obsf.http_requests.count`, agrupada por `service` e `status`.
+2. Os rótulos do Prometheus (`method`, `endpoint`, `status`) viraram tags.
+3. Mostre `obsf.orders_pending`: é o mesmo gauge do Módulo 2.
+
+### B.4 Service Map (se houver tempo)
+
+**APM → Service Map**, filtro `env:obsf-lab`: `checkout-api` → `payment-service`, com taxa de requisições, erros e latência em cada nó. No Módulo 4 esses números vinham de uma ferramenta separada; aqui estão no próprio mapa.
+
+### B.5 SLIs e SLOs
+
+**O que dizer:** até aqui medimos o sistema. O SLO mede a promessa feita ao usuário e diz quanto ainda podemos errar.
+
+**Na demo:**
+
+1. **Service Mgmt → SLOs**, abra `[obsf] Disponibilidade da checkout-api`.
+2. Mostre os três números: o **SLI** atual, a **meta** de 99% e o **error budget** restante.
+3. Abra `[obsf] Latência da checkout-api` e mostre que um SLO também pode ser construído a partir de um monitor.
+4. Pergunta para a turma: o `payment-service` falha 5% das vezes. Por que o SLO da `checkout-api` está saudável? (A nova tentativa esconde a falha; o SLO mede o que o usuário vê.)
+
+### B.6 Alertas e anomalias
+
+**O que dizer:** vamos repetir a anomalia do Módulo 6 e ver dois monitores reagirem: um com limite fixo, outro que aprendeu o que é normal.
+
+**Na demo:**
+
+1. Pare o gerador (`Ctrl+C`) e reinicie no modo anomalia:
+
+```bash
+sudo docker compose run --rm load --mode anomaly
+```
+
+2. Enquanto os 2 minutos normais passam, abra o monitor `[obsf] Latência da checkout-api fora do padrão`: o gráfico mostra a **faixa cinza** do comportamento esperado em torno da linha da métrica. Ninguém informou esses valores.
+3. Aos 2 minutos a anomalia começa. A linha sai da faixa cinza e os dois monitores de latência passam a **Alert**.
+4. Abra o **Watchdog** (menu principal): se houver histórico suficiente, ele lista a anomalia sem que nenhum monitor tenha sido criado para isso.
+5. Em **APM → Traces**, filtre por duração acima de 2 s e abra um trace: o tempo está em `process_payment`, com a tag `chaos.latency_ms`. Do alerta à causa em dois cliques.
+6. Aos 4 minutos a anomalia termina e os monitores voltam a **OK**.
+
+| | Módulo 6 (open source) | Datadog |
+|---|---|---|
+| Limite fixo | Regra em `alert-rules.yml` | Monitor com Threshold |
+| Baseline | Regra PromQL escrita à mão, com média e desvio padrão | Monitor de anomalia: escolhe-se o algoritmo e o Datadog calcula a faixa |
+| Sem regra nenhuma | Não há | Watchdog |
+| Entrega do alerta | Alertmanager → webhook | Notificação do próprio monitor |
+
+### B.7 Teste de resiliência com o Gremlin
+
+**O que dizer:** até agora a "falha" era um parâmetro da nossa aplicação. O Gremlin provoca a falha na rede do container, de fora, sem que a aplicação saiba. E ele observa um monitor do Datadog: se o sistema sair do aceitável, o experimento é interrompido sozinho.
+
+**Na demo:**
+
+1. Volte o gerador ao modo normal e espere o monitor `[obsf] Latência da checkout-api alta` ficar **OK**.
+2. No Gremlin, abra o cenário `Lentidão no pagamento` e mostre o Health Check apontando para o monitor do Datadog.
+3. Clique em **Run Scenario**.
+4. No Datadog, a latência sobe como no passo B.6, mas desta vez o atributo `chaos.latency_ms` do span está em `0`: a aplicação não sabe de nada.
+5. Em 1 a 3 minutos o monitor vai a **Alert**. O Gremlin detecta, **interrompe o experimento** antes dos 300 s e marca o cenário como interrompido pelo Health Check.
+6. A latência volta ao normal e o monitor volta a **OK**.
+
+Fechamento: a observabilidade deixou de ser só para investigar depois do problema. Ela virou o critério de segurança de um teste feito de propósito.
+
+### B.8 Encerrar
+
+No terminal da instância:
+
+```bash
+cd /opt/obsf && sudo observability-lab/trocar-modulo.sh parar
+```
+
+```bash
+sudo docker rm -f modulo-7-gremlin-1
+```
+
+Depois da última aula com este módulo:
+
+1. No Datadog, em **Organization Settings → API Keys**, revogue a API key e a Application key.
+2. Na instância, apague o arquivo de chaves: `sudo rm /opt/obsf/observability-lab/modulo-7/segredos.env` (ele some de qualquer forma ao apagar a stack).
+3. No Gremlin, remova o Health Check, que guarda as chaves do Datadog.
+
+### Resumo para fechar o módulo
+
+| Papel | Módulos 2 a 6 | Módulo 7 |
+|-------|---------------|----------|
+| Instrumentação | OpenTelemetry, Pino, prom-client | A mesma |
+| Recebe os traces | Jaeger | Datadog Agent (OTLP) |
+| Coleta as métricas | Prometheus | Datadog Agent (OpenMetrics) |
+| Coleta os logs | `docker logs` | Datadog Agent |
+| Consulta e dashboards | Jaeger UI, Prometheus, Grafana | Datadog |
+| Alertas | Alertmanager | Monitores |
+| Containers de observabilidade | 4 a 6 | 1 |
+| Mudança no código | — | Quatro linhas no logger |
+
+Três ideias para os alunos levarem: instrumentar com padrões abertos permite **trocar de ferramenta sem reescrever a aplicação**; uma plataforma integrada troca **esforço de operação por custo de licença**; e observabilidade madura é a que serve de **critério para decisões**, como metas (SLO) e testes de resiliência.
+
 ---
 
 # Encerramento
 
-## 10. Apagar tudo
+## 11. Apagar tudo
 
 ```bash
 aws cloudformation delete-stack --stack-name obsf-modulo-2
@@ -1230,7 +1640,7 @@ observability-lab/trocar-modulo.sh parar
 
 ```
 observability-lab/
-├── trocar-modulo.sh          coloca no ar a demo do módulo 2, 3, 4 ou 6
+├── trocar-modulo.sh          coloca no ar a demo do módulo 2, 3, 4, 6 ou 7
 ├── modulo-1/assets/          infográficos de conceitos
 ├── modulo-2/                 checkout-api com os 3 pilares
 │   ├── aws/cloudformation.yaml   o ambiente da AWS (usado por todos os módulos)
@@ -1251,11 +1661,16 @@ observability-lab/
 │   ├── data-masking.js       funções de mascaramento
 │   ├── exemplo.js            demonstração executável
 │   └── assets/cia-triad.html infográfico da tríade CIA
-└── modulo-6/                 os dois serviços do módulo 4, com anomalias e alertas
-    ├── api/, payment-service/    o payment-service ganha o endpoint /chaos
-    ├── load.js               gerador de tráfego com os modos anomaly, erros e pico
-    ├── alert-rules.yml       regras de alerta do Prometheus
-    ├── alertmanager.yml      agrupamento e destino dos alertas
-    ├── webhook/              destino de mentira que imprime os alertas
-    └── grafana/dashboards/   dashboard pronto
+├── modulo-6/                 os dois serviços do módulo 4, com anomalias e alertas
+│   ├── api/, payment-service/    o payment-service ganha o endpoint /chaos
+│   ├── load.js               gerador de tráfego com os modos anomaly, erros e pico
+│   ├── alert-rules.yml       regras de alerta do Prometheus
+│   ├── alertmanager.yml      agrupamento e destino dos alertas
+│   ├── webhook/              destino de mentira que imprime os alertas
+│   └── grafana/dashboards/   dashboard pronto
+└── modulo-7/                 os mesmos serviços, enviando para o Datadog
+    ├── api/, payment-service/    código do módulo 6 + campos dd.trace_id nos logs
+    ├── docker-compose.yml    os dois serviços, o Datadog Agent e o agente do Gremlin
+    ├── segredos.env.exemplo  modelo do arquivo de chaves (o segredos.env não vai para o GitHub)
+    └── .env, load.js, start.sh, atualizar.sh
 ```

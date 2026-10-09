@@ -1,0 +1,109 @@
+name: modulo-7
+
+# Etiquetas que o Datadog Agent lê em cada container de aplicação:
+#   - tags.service / env / version: identificam o serviço em logs, métricas e traces
+#   - ad.checks: manda o Agent coletar o /metrics (formato Prometheus) do container.
+#     A lista "metrics" limita a coleta ao que usamos: métrica customizada também é cobrada.
+#   - ad.logs: diz que os logs são de uma aplicação Node.js
+
+services:
+  # ---------- Serviço 1: checkout-api ----------
+  api:
+    build: ./api
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: checkout-api
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    labels:
+      com.datadoghq.tags.service: checkout-api
+      com.datadoghq.tags.env: obsf-lab
+      com.datadoghq.tags.version: "1.0.0"
+      com.datadoghq.ad.checks: '{"openmetrics": {"instances": [{"openmetrics_endpoint": "http://%%host%%:3000/metrics", "namespace": "obsf", "metrics": ["http_request.*", "orders_pending", "traces.*"]}]}}'
+      com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "checkout-api"}]'
+    depends_on:
+      - datadog-agent
+      - payment-service
+
+  # ---------- Serviço 2: payment-service ----------
+  payment-service:
+    build: ./payment-service
+    init: true
+    env_file: .env
+    environment:
+      SERVICE_NAME: payment-service
+      PORT: 3001
+    ports:
+      - "3002:3001" # só para o load.js alcançar o /chaos quando roda fora do Docker
+    labels:
+      com.datadoghq.tags.service: payment-service
+      com.datadoghq.tags.env: obsf-lab
+      com.datadoghq.tags.version: "1.0.0"
+      com.datadoghq.ad.checks: '{"openmetrics": {"instances": [{"openmetrics_endpoint": "http://%%host%%:3001/metrics", "namespace": "obsf", "metrics": ["http_request.*", "orders_pending", "traces.*"]}]}}'
+      com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "payment-service"}]'
+    depends_on:
+      - datadog-agent
+
+  # ---------- Datadog Agent: recebe traces, coleta métricas e logs, e envia ao Datadog ----------
+  # Substitui Jaeger, Prometheus, Grafana e Alertmanager dos módulos anteriores.
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    env_file:                       # DD_API_KEY e DD_SITE
+      - path: segredos.env
+        required: false
+    pid: host
+    environment:
+      DD_ENV: obsf-lab
+      DD_HOSTNAME: obsf-demo
+      # TRACES: aceita o mesmo protocolo OTLP que as aplicações já falavam com o Jaeger
+      DD_APM_ENABLED: "true"
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
+      # LOGS: coleta só dos containers que têm a etiqueta ad.logs (os dois serviços).
+      # Coletar de todos os containers aumentaria o volume, e log é cobrado por volume.
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+
+  # ---------- Gremlin: agente de testes de resiliência (opcional) ----------
+  # Sobe só com:  docker compose --profile gremlin up -d gremlin
+  gremlin:
+    image: gremlin/gremlin
+    profiles: ["gremlin"]
+    command: daemon
+    env_file:                       # GREMLIN_TEAM_ID e GREMLIN_TEAM_SECRET
+      - path: segredos.env
+        required: false
+    environment:
+      GREMLIN_IDENTIFIER: obsf-demo
+    network_mode: host
+    pid: host
+    # Permissões pedidas pela documentação do Gremlin para agir sobre rede, processos e containers
+    cap_add: [SYS_PTRACE, SYS_ADMIN, SYS_CHROOT, SYS_RESOURCE, NET_ADMIN, SYS_BOOT, SYS_TIME, KILL]
+    volumes:
+      - /var/lib/gremlin:/var/lib/gremlin
+      - /var/log/gremlin:/var/log/gremlin
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+
+  # ---------- Gerador de tráfego e de anomalias (o mesmo do Módulo 6) ----------
+  # Uso: docker compose run --rm load                  (normal)
+  #      docker compose run --rm load --mode anomaly   (lentidão no pagamento aos 2 min)
+  load:
+    image: node:22-alpine
+    profiles: ["load"]
+    working_dir: /app
+    entrypoint: ["node", "load.js"]
+    init: true
+    environment:
+      BASE_URL: http://api:3000
+      PAYMENT_ADMIN_URL: http://payment-service:3001
+      ANOMALY_START_S: ${ANOMALY_START_S:-120}
+      ANOMALY_END_S: ${ANOMALY_END_S:-240}
+    volumes:
+      - ./load.js:/app/load.js:ro
